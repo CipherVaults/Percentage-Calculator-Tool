@@ -57,12 +57,25 @@ Desktop polish:
 - **in-app dark terminal About modal** (`Esc` / backdrop / `[ × ]`)
 - Windows NSIS & MSI installers
 - standalone Windows portable executable
+- **self-contained Mobile & Web PWA (`mobile/`)** for **iPhone (Safari → Add to Home Screen)** and **Android (Chrome → Install app)**
+
+---
+
+## Mobile & Web Edition (iPhone & Android)
+
+A zero-dependency single-file HTML + offline PWA edition of **v2.1.0** lives in `mobile/`:
+
+- **Live Web App (GitHub Pages):** `https://ciphervaults.github.io/Percentage-Calculator-Tool/`
+  - **iPhone / iPad (Safari):** Open the link in **Safari** → tap **Share (`↑`)** → **Add to Home Screen** → **Add**.
+  - **Android (Chrome / Edge):** Open the link → tap **`⋮`** → **Install app** (or **Add to Home screen**).
+  - **Offline Ready:** The included Service Worker (`mobile/sw.js`) caches the full app and icons after first open, and local history (up to 500 entries) is stored on-device in `localStorage`.
+- **Single-File HTML (`mobile/index.html`):** Works standalone when opened directly in any browser without external dependencies (`install app` button automatically hides once installed to the Home Screen).
 
 ---
 
 ## Current Version
 
-Desktop **v2.1.0** (Tauri v2 + Rust)
+Desktop & Mobile **v2.1.0** (Tauri v2 + Rust / Standalone Mobile PWA)
 
 ---
 
@@ -73,9 +86,13 @@ Static Webview UI (ui/index.html, styles.css, main.js)
   -> Tauri invoke() commands (src-tauri/src/commands.rs)
   -> Pure Rust calculation crate (crates/percent-core)
   -> Atomic local JSON history store & native clipboard plugin
+
+Mobile & Web Edition (mobile/index.html)
+  -> Self-contained terminal HTML/CSS/JS (10,661-case math parity)
+  -> On-device localStorage history (500-entry FIFO) + Service Worker offline cache
 ```
 
-The UI stays plain HTML, CSS, and JavaScript — no frontend framework and no bundler. All seven percentage and pricing formulas live in a standalone Rust crate (`percent-core`) with zero UI dependencies, so the math can be tested directly with `cargo test` and is verified byte-for-byte against 10,661 golden test cases captured from the v1.1 JavaScript implementation.
+The UI stays plain HTML, CSS, and JavaScript — no frontend framework and no bundler. All seven percentage and pricing formulas live in a standalone Rust crate (`percent-core`) with zero UI dependencies (and match `mobile/index.html` byte-for-byte), so the math can be tested directly with `cargo test` and is verified against 10,661 golden test cases captured from the v1.1 JavaScript implementation.
 
 ---
 
@@ -85,11 +102,12 @@ The UI stays plain HTML, CSS, and JavaScript — no frontend framework and no bu
 Cargo.toml              Rust workspace (percent-core + src-tauri)
 crates/percent-core/    Pure Rust percentage math + unit & 10k golden parity tests
 src-tauri/              Tauri v2 desktop shell, commands, icons, capabilities
-ui/                     Static HTML, CSS, and frontend controller (no bundler)
+ui/                     Desktop Tauri frontend HTML, CSS, and JS controller
+mobile/                 Standalone single-file HTML & PWA for iPhone Safari & Android
 assets/                 Source app icon assets
-reference/              Original single-file HTML utility
+reference/              Original single-file HTML utility (v1.1)
 Documentation/          Project context, architecture, roadmap, and session summary
-.github/workflows/      GitHub Actions CI (Rust tests, smoke test, Windows bundles)
+.github/workflows/      GitHub Actions CI (Rust tests, smoke test, Windows bundles, Pages PWA)
 ```
 
 ---

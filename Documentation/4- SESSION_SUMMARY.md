@@ -382,4 +382,18 @@ Expand Percentage Calculator Tool Desktop to **v2.1.0** while keeping the termin
 4. **Persistent local calculation history tape** at the bottom of the app (up to 500 entries stored in `%APPDATA%\com.percentagecalculator.tool\history.json`, recorded on explicit actions, with `copy`, `↺ restore`, and `clear history`).
 5. **Redesigned in-app dark terminal About modal** replacing the bright white Windows OS `MessageBox`, crediting **Mohamed Sayed · Ahmed Emara · DeepSeek · ChatGPT · Antigravity**, and dropping `tauri-plugin-dialog`.
 
+---
 
+## Session: November 13th, 2026 - Standalone Mobile HTML & iOS/Android PWA Edition (v2.1.0)
+
+---
+
+### Goal
+
+Provide **v2.1.0** as a standalone HTML file tailored for **iPhone Safari** ("Add to Home Screen") and **Android Chrome** ("Install app"), while keeping 100% calculation parity and offline privacy.
+
+### What Was Built
+
+1. **`mobile/index.html`** — self-contained single-file HTML/CSS/JS edition with all 7 calculators, `⇅ swap values`, Markup & Margin, Reverse Tax/VAT, 500-entry `localStorage` history, Dark Terminal About modal, and mobile ergonomics (safe-area notch padding, `16px` input font size to eliminate iOS Safari focus zoom, quick-jump bar, legacy clipboard fallback for `file://`, and an adaptive Home Screen install helper).
+2. **`mobile/manifest.webmanifest`, `mobile/sw.js`, and `mobile/icons/`** — generated crisp PNG icons (`180x180` Apple touch icon, `192x192`, `512x512`, and `512x512` maskable Android safe-zone icon) and an offline-first Service Worker.
+3. **CI & GitHub Pages** — added `.github/workflows/pages.yml` to deploy `mobile/` to GitHub Pages automatically and updated `.github/workflows/build.yml` to test 10,661 golden cases against `mobile/index.html` and attach the standalone HTML deliverable.

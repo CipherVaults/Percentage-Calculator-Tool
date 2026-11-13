@@ -397,3 +397,20 @@ Provide **v2.1.0** as a standalone HTML file tailored for **iPhone Safari** ("Ad
 1. **`mobile/index.html`** — self-contained single-file HTML/CSS/JS edition with all 7 calculators, `⇅ swap values`, Markup & Margin, Reverse Tax/VAT, 500-entry `localStorage` history, Dark Terminal About modal, and mobile ergonomics (safe-area notch padding, `16px` input font size to eliminate iOS Safari focus zoom, quick-jump bar, legacy clipboard fallback for `file://`, and an adaptive Home Screen install helper).
 2. **`mobile/manifest.webmanifest`, `mobile/sw.js`, and `mobile/icons/`** — generated crisp PNG icons (`180x180` Apple touch icon, `192x192`, `512x512`, and `512x512` maskable Android safe-zone icon) and an offline-first Service Worker.
 3. **CI & GitHub Pages** — added `.github/workflows/pages.yml` to deploy `mobile/` to GitHub Pages automatically and updated `.github/workflows/build.yml` to test 10,661 golden cases against `mobile/index.html` and attach the standalone HTML deliverable.
+
+---
+
+## Session: November 13th, 2026 - Security Audit, Defense-in-Depth Hardening & Live Web App Integration (v2.1.1)
+
+---
+
+### Goal
+
+Perform a comprehensive source security audit of the entire codebase (Tauri v2 desktop, Rust backend, Mobile & Web PWA, and GitHub Actions workflows), implement defense-in-depth hardening into **v2.1.1**, verify everything offline and end-to-end, and surface the live Web App URL (`https://ciphervaults.github.io/Percentage-Calculator-Tool/`) visibly across the repository and apps.
+
+### What Was Hardened
+
+1. **Security Audit Baseline (`0` Confirmed Findings)** — audited `percent-core`, `src-tauri`, `ui/`, `mobile/`, and `.github/workflows/`, confirming zero `innerHTML`/`eval` sinks, zero network calls or secrets, and full 10k math parity. Two hosted GitHub configuration checks (`Actions -> General` SHA allowlist and `github-pages` environment protection rule) and Windows bundle staging remain owner-verifiable on GitHub / `windows-latest`.
+2. **Rust / Tauri Shell (`src-tauri/`)** — tightened `capabilities/default.json` to `permissions: []`, expanded desktop CSP (`connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`), and hardened `commands.rs` (`history.json` symlink checks, `1 MiB` capped read, shared field validation on disk load, atomic unique temp writes with Unix `0o600` files / `0o700` dirs, lock-held commit-on-success writes, `4096`-byte clipboard cap, plus new unit tests).
+3. **Desktop & Mobile Frontends (`ui/`, `mobile/`)** — added `<meta http-equiv="Content-Security-Policy">` with exact SHA-256 hashes of inline `<style>` and `<script>` inside `mobile/index.html`, `<meta name="referrer" content="no-referrer">`, schema-validated `localStorage` (`256`-char field caps, clean reset on storage clear, cross-tab `storage` listener), `Object.hasOwn` guards, `.clipboard-scratch` class replacing inline styles, IPC error recovery, scope-pathname + `!response.redirected` checks in `mobile/sw.js` (`pct-tool-v2.1.1-mobile-1`), and the official Web App URL & copy button inside both About modals.
+4. **CI/CD Supply Chain & Checksums (`.github/workflows/`, `.gitattributes`, `.gitignore`)** — pinned all Actions to 40-char commit SHAs with `persist-credentials: false`, enforced `--locked` Rust builds, split unprivileged `windows-build` (`contents: read`) from `main`/tag-only `release` (`contents: write`), added Node 10k parity + CSP SHA-256 + sink checks before build and Pages deploy, enforced LF endings on web assets, and added `dist/SHA256SUMS.txt` alongside release installers and standalone mobile HTML.

@@ -5,6 +5,8 @@
 // and app metadata to the Rust backend via Tauri commands.
 
 const COPY_FEEDBACK_MS = 1200;
+const MAX_FIELD_LEN = 256;
+const WEB_APP_URL = "https://ciphervaults.github.io/Percentage-Calculator-Tool/";
 let historyLimit = 500;
 let taxMode = "add";
 
@@ -55,6 +57,24 @@ function getRawInput(id) {
   return el ? el.value.trim() : "";
 }
 
+function buildValidHistoryCandidate(candidate) {
+  const fields = [
+    candidate.calculatorLabel,
+    candidate.inputA,
+    candidate.inputB,
+    candidate.inputsText,
+    candidate.resultText,
+    candidate.copyText
+  ];
+  const valid = fields.every(
+    (v) =>
+      typeof v === "string" &&
+      v.trim().length > 0 &&
+      v.length <= MAX_FIELD_LEN
+  );
+  return valid ? candidate : null;
+}
+
 function setLines(el, lines) {
   if (!el) return;
   el.replaceChildren();
@@ -100,14 +120,17 @@ function setResult(resultId, content, isError = false) {
 function showCopyFeedback(button) {
   if (!button) return;
 
-  const originalText = button.innerText;
-  button.innerText = "copied";
+  const originalText = button.dataset.label || button.textContent;
+  button.dataset.label = originalText;
+  button.textContent = "copied";
   button.classList.add("copied");
+  window.clearTimeout(Number(button.dataset.copyTimer || 0));
 
-  window.setTimeout(() => {
-    button.innerText = originalText;
+  const timer = window.setTimeout(() => {
+    button.textContent = originalText;
     button.classList.remove("copied");
   }, COPY_FEEDBACK_MS);
+  button.dataset.copyTimer = String(timer);
 }
 
 async function copyText(text, button) {
@@ -158,38 +181,46 @@ async function updateChangeLive() {
     return;
   }
 
-  const result = await invoke("calc_change", {
-    originalValue: orig,
-    newValue: newVal
-  });
-  if (ticket !== seq.change) return;
+  try {
+    const result = await invoke("calc_change", {
+      originalValue: orig,
+      newValue: newVal
+    });
+    if (ticket !== seq.change) return;
 
-  if (result.ok === "false") {
+    if (result.ok === "false") {
+      lastValidCalc.change = null;
+      setFormulaError(
+        formulaDiv,
+        "((new − original) / original) × 100",
+        "(original cannot be zero)"
+      );
+      resultSpan.textContent = "→ invalid";
+      setResult("changeResult", result.error, true);
+      return;
+    }
+
+    formulaDiv.textContent = `((${newVal} − ${orig}) / ${orig}) × 100`;
+    resultSpan.textContent = `→ ${result.liveResult}`;
+    setResult("changeResult", result.label);
+
+    lastValidCalc.change = buildValidHistoryCandidate({
+      calculator: "change",
+      calculatorLabel: "Percentage Change",
+      inputA: getRawInput("changeOrig"),
+      inputB: getRawInput("changeNew"),
+      mode: null,
+      inputsText: `${orig} → ${newVal}`,
+      resultText: result.label,
+      copyText: result.label
+    });
+  } catch {
+    if (ticket !== seq.change) return;
     lastValidCalc.change = null;
-    setFormulaError(
-      formulaDiv,
-      "((new − original) / original) × 100",
-      "(original cannot be zero)"
-    );
+    formulaDiv.textContent = "((new − original) / original) × 100";
     resultSpan.textContent = "→ invalid";
-    setResult("changeResult", result.error, true);
-    return;
+    setResult("changeResult", "Value out of range", true);
   }
-
-  formulaDiv.textContent = `((${newVal} − ${orig}) / ${orig}) × 100`;
-  resultSpan.textContent = `→ ${result.liveResult}`;
-  setResult("changeResult", result.label);
-
-  lastValidCalc.change = {
-    calculator: "change",
-    calculatorLabel: "Percentage Change",
-    inputA: getRawInput("changeOrig"),
-    inputB: getRawInput("changeNew"),
-    mode: null,
-    inputsText: `${orig} → ${newVal}`,
-    resultText: result.label,
-    copyText: result.label
-  };
 }
 
 async function updatePercentLive() {
@@ -207,31 +238,39 @@ async function updatePercentLive() {
     return;
   }
 
-  const result = await invoke("calc_percent_of_total", { part: x, total: y });
-  if (ticket !== seq.percent) return;
+  try {
+    const result = await invoke("calc_percent_of_total", { part: x, total: y });
+    if (ticket !== seq.percent) return;
 
-  if (result.ok === "false") {
+    if (result.ok === "false") {
+      lastValidCalc.percent = null;
+      setFormulaError(formulaDiv, "(X / Y) × 100", "(Y cannot be zero)");
+      resultSpan.textContent = "→ invalid";
+      setResult("percentResult", result.error, true);
+      return;
+    }
+
+    formulaDiv.textContent = `(${x} / ${y}) × 100`;
+    resultSpan.textContent = `→ ${result.label}`;
+    setResult("percentResult", result.label);
+
+    lastValidCalc.percent = buildValidHistoryCandidate({
+      calculator: "percent",
+      calculatorLabel: "Percentage of Total",
+      inputA: getRawInput("isWhatX"),
+      inputB: getRawInput("isWhatY"),
+      mode: null,
+      inputsText: `${x} of ${y}`,
+      resultText: result.label,
+      copyText: result.label
+    });
+  } catch {
+    if (ticket !== seq.percent) return;
     lastValidCalc.percent = null;
-    setFormulaError(formulaDiv, "(X / Y) × 100", "(Y cannot be zero)");
+    formulaDiv.textContent = "(X / Y) × 100";
     resultSpan.textContent = "→ invalid";
-    setResult("percentResult", result.error, true);
-    return;
+    setResult("percentResult", "Value out of range", true);
   }
-
-  formulaDiv.textContent = `(${x} / ${y}) × 100`;
-  resultSpan.textContent = `→ ${result.label}`;
-  setResult("percentResult", result.label);
-
-  lastValidCalc.percent = {
-    calculator: "percent",
-    calculatorLabel: "Percentage of Total",
-    inputA: getRawInput("isWhatX"),
-    inputB: getRawInput("isWhatY"),
-    mode: null,
-    inputsText: `${x} of ${y}`,
-    resultText: result.label,
-    copyText: result.label
-  };
 }
 
 async function updateWhatLive() {
@@ -249,23 +288,31 @@ async function updateWhatLive() {
     return;
   }
 
-  const result = await invoke("calc_portion", { percent: x, number: y });
-  if (ticket !== seq.what) return;
+  try {
+    const result = await invoke("calc_portion", { percent: x, number: y });
+    if (ticket !== seq.what) return;
 
-  formulaDiv.textContent = `(${x} / 100) × ${y}`;
-  resultSpan.textContent = `→ ${result.label}`;
-  setResult("whatResult", result.label);
+    formulaDiv.textContent = `(${x} / 100) × ${y}`;
+    resultSpan.textContent = `→ ${result.label}`;
+    setResult("whatResult", result.label);
 
-  lastValidCalc.what = {
-    calculator: "what",
-    calculatorLabel: "Calculate Percentage",
-    inputA: getRawInput("whatX"),
-    inputB: getRawInput("whatY"),
-    mode: null,
-    inputsText: `${x}% of ${y}`,
-    resultText: result.label,
-    copyText: result.label
-  };
+    lastValidCalc.what = buildValidHistoryCandidate({
+      calculator: "what",
+      calculatorLabel: "Calculate Percentage",
+      inputA: getRawInput("whatX"),
+      inputB: getRawInput("whatY"),
+      mode: null,
+      inputsText: `${x}% of ${y}`,
+      resultText: result.label,
+      copyText: result.label
+    });
+  } catch {
+    if (ticket !== seq.what) return;
+    lastValidCalc.what = null;
+    formulaDiv.textContent = "(X / 100) × Y";
+    resultSpan.textContent = "→ invalid";
+    setResult("whatResult", "Value out of range", true);
+  }
 }
 
 async function updateDiscountLive() {
@@ -286,29 +333,40 @@ async function updateDiscountLive() {
     return;
   }
 
-  const result = await invoke("calc_discount", {
-    price,
-    discountPercent: disc
-  });
-  if (ticket !== seq.discount) return;
+  try {
+    const result = await invoke("calc_discount", {
+      price,
+      discountPercent: disc
+    });
+    if (ticket !== seq.discount) return;
 
-  setLines(formulaDiv, [
-    `final = ${price} × (1 − ${disc}/100) = ${result.finalText}`,
-    `saved = ${price} × ${disc}/100 = ${result.savedText}`
-  ]);
-  resultSpan.textContent = `→ final: ${result.finalText} | saved: ${result.savedText}`;
-  setResult("discountResult", result.label);
+    setLines(formulaDiv, [
+      `final = ${price} × (1 − ${disc}/100) = ${result.finalText}`,
+      `saved = ${price} × ${disc}/100 = ${result.savedText}`
+    ]);
+    resultSpan.textContent = `→ final: ${result.finalText} | saved: ${result.savedText}`;
+    setResult("discountResult", result.label);
 
-  lastValidCalc.discount = {
-    calculator: "discount",
-    calculatorLabel: "Discount",
-    inputA: getRawInput("discountPrice"),
-    inputB: getRawInput("discountPercent"),
-    mode: null,
-    inputsText: `${price} (−${disc}%)`,
-    resultText: `Final: ${result.finalText} · Saved: ${result.savedText}`,
-    copyText: result.copyText
-  };
+    lastValidCalc.discount = buildValidHistoryCandidate({
+      calculator: "discount",
+      calculatorLabel: "Discount",
+      inputA: getRawInput("discountPrice"),
+      inputB: getRawInput("discountPercent"),
+      mode: null,
+      inputsText: `${price} (−${disc}%)`,
+      resultText: `Final: ${result.finalText} · Saved: ${result.savedText}`,
+      copyText: result.copyText
+    });
+  } catch {
+    if (ticket !== seq.discount) return;
+    lastValidCalc.discount = null;
+    setLines(formulaDiv, [
+      "final = price × (1 − discount/100)",
+      "saved = price × discount/100"
+    ]);
+    resultSpan.textContent = "→ invalid";
+    setResult("discountResult", "Value out of range", true);
+  }
 }
 
 async function updateBaseLive() {
@@ -326,31 +384,39 @@ async function updateBaseLive() {
     return;
   }
 
-  const result = await invoke("calc_original", { value: x, percent: y });
-  if (ticket !== seq.base) return;
+  try {
+    const result = await invoke("calc_original", { value: x, percent: y });
+    if (ticket !== seq.base) return;
 
-  if (result.ok === "false") {
+    if (result.ok === "false") {
+      lastValidCalc.base = null;
+      setFormulaError(formulaDiv, "X / (Y / 100)", "(Y cannot be zero)");
+      resultSpan.textContent = "→ invalid";
+      setResult("baseResult", result.error, true);
+      return;
+    }
+
+    formulaDiv.textContent = `${x} / (${y} / 100)`;
+    resultSpan.textContent = `→ ${result.label}`;
+    setResult("baseResult", result.label);
+
+    lastValidCalc.base = buildValidHistoryCandidate({
+      calculator: "base",
+      calculatorLabel: "Find Original Value",
+      inputA: getRawInput("baseX"),
+      inputB: getRawInput("baseY"),
+      mode: null,
+      inputsText: `${x} is ${y}%`,
+      resultText: result.label,
+      copyText: result.label
+    });
+  } catch {
+    if (ticket !== seq.base) return;
     lastValidCalc.base = null;
-    setFormulaError(formulaDiv, "X / (Y / 100)", "(Y cannot be zero)");
+    formulaDiv.textContent = "X / (Y / 100)";
     resultSpan.textContent = "→ invalid";
-    setResult("baseResult", result.error, true);
-    return;
+    setResult("baseResult", "Value out of range", true);
   }
-
-  formulaDiv.textContent = `${x} / (${y} / 100)`;
-  resultSpan.textContent = `→ ${result.label}`;
-  setResult("baseResult", result.label);
-
-  lastValidCalc.base = {
-    calculator: "base",
-    calculatorLabel: "Find Original Value",
-    inputA: getRawInput("baseX"),
-    inputB: getRawInput("baseY"),
-    mode: null,
-    inputsText: `${x} is ${y}%`,
-    resultText: result.label,
-    copyText: result.label
-  };
 }
 
 async function updateMarkupLive() {
@@ -372,42 +438,54 @@ async function updateMarkupLive() {
     return;
   }
 
-  const result = await invoke("calc_markup_margin", {
-    cost,
-    sellingPrice: price
-  });
-  if (ticket !== seq.markup) return;
+  try {
+    const result = await invoke("calc_markup_margin", {
+      cost,
+      sellingPrice: price
+    });
+    if (ticket !== seq.markup) return;
 
-  if (result.ok === "false") {
+    if (result.ok === "false") {
+      lastValidCalc.markup = null;
+      setFormulaError(
+        formulaDiv,
+        "markup = (price − cost) / cost × 100",
+        `(${result.error.toLowerCase()})`
+      );
+      resultSpan.textContent = "→ invalid";
+      setResult("markupResult", result.error, true);
+      return;
+    }
+
+    setLines(formulaDiv, [
+      `profit = ${price} − ${cost} = ${result.profitText}`,
+      `markup = (${result.profitText} / ${cost}) × 100 = ${result.markupText}`,
+      `margin = (${result.profitText} / ${price}) × 100 = ${result.marginText}`
+    ]);
+    resultSpan.textContent = `→ ${result.liveResult}`;
+    setResult("markupResult", result.label);
+
+    lastValidCalc.markup = buildValidHistoryCandidate({
+      calculator: "markup",
+      calculatorLabel: "Markup & Margin",
+      inputA: getRawInput("markupCost"),
+      inputB: getRawInput("markupPrice"),
+      mode: null,
+      inputsText: `Cost ${cost} → Price ${price}`,
+      resultText: `Profit: ${result.profitText} · Markup: ${result.markupText} · Margin: ${result.marginText}`,
+      copyText: result.copyText
+    });
+  } catch {
+    if (ticket !== seq.markup) return;
     lastValidCalc.markup = null;
-    setFormulaError(
-      formulaDiv,
-      "markup = (price − cost) / cost × 100",
-      `(${result.error.toLowerCase()})`
-    );
+    setLines(formulaDiv, [
+      "profit = price − cost",
+      "markup = (profit / cost) × 100",
+      "margin = (profit / price) × 100"
+    ]);
     resultSpan.textContent = "→ invalid";
-    setResult("markupResult", result.error, true);
-    return;
+    setResult("markupResult", "Value out of range", true);
   }
-
-  setLines(formulaDiv, [
-    `profit = ${price} − ${cost} = ${result.profitText}`,
-    `markup = (${result.profitText} / ${cost}) × 100 = ${result.markupText}`,
-    `margin = (${result.profitText} / ${price}) × 100 = ${result.marginText}`
-  ]);
-  resultSpan.textContent = `→ ${result.liveResult}`;
-  setResult("markupResult", result.label);
-
-  lastValidCalc.markup = {
-    calculator: "markup",
-    calculatorLabel: "Markup & Margin",
-    inputA: getRawInput("markupCost"),
-    inputB: getRawInput("markupPrice"),
-    mode: null,
-    inputsText: `Cost ${cost} → Price ${price}`,
-    resultText: `Profit: ${result.profitText} · Markup: ${result.markupText} · Margin: ${result.marginText}`,
-    copyText: result.copyText
-  };
 }
 
 function setTaxMode(newMode, triggerUpdate = true) {
@@ -461,55 +539,73 @@ async function updateTaxLive() {
     return;
   }
 
-  const result = await invoke("calc_tax", {
-    amount,
-    ratePercent: rate,
-    mode
-  });
-  if (ticket !== seq.tax) return;
+  try {
+    const result = await invoke("calc_tax", {
+      amount,
+      ratePercent: rate,
+      mode
+    });
+    if (ticket !== seq.tax) return;
 
-  if (result.ok === "false") {
+    if (result.ok === "false") {
+      lastValidCalc.tax = null;
+      setFormulaError(
+        formulaDiv,
+        "net = total / (1 + rate/100)",
+        `(${result.error.toLowerCase()})`
+      );
+      resultSpan.textContent = "→ invalid";
+      setResult("taxResult", result.error, true);
+      return;
+    }
+
+    if (mode === "extract") {
+      setLines(formulaDiv, [
+        `net = ${amount} / (1 + ${rate}/100) = ${result.netText}`,
+        `tax = ${amount} − ${result.netText} = ${result.taxText}`
+      ]);
+    } else {
+      setLines(formulaDiv, [
+        `tax = ${amount} × (${rate} / 100) = ${result.taxText}`,
+        `total = ${amount} + ${result.taxText} = ${result.totalText}`
+      ]);
+    }
+    resultSpan.textContent = `→ ${result.liveResult}`;
+    setResult("taxResult", result.label);
+
+    lastValidCalc.tax = buildValidHistoryCandidate({
+      calculator: "tax",
+      calculatorLabel: mode === "extract" ? "Tax / VAT (Extract)" : "Tax / VAT (Add)",
+      inputA: getRawInput("taxAmount"),
+      inputB: getRawInput("taxRate"),
+      mode,
+      inputsText:
+        mode === "extract"
+          ? `${amount} incl. ${rate}% tax`
+          : `${amount} + ${rate}% tax`,
+      resultText:
+        mode === "extract"
+          ? `Net: ${result.netText} · Tax: ${result.taxText}`
+          : `Total: ${result.totalText} · Tax: ${result.taxText}`,
+      copyText: result.copyText
+    });
+  } catch {
+    if (ticket !== seq.tax) return;
     lastValidCalc.tax = null;
-    setFormulaError(
-      formulaDiv,
-      "net = total / (1 + rate/100)",
-      `(${result.error.toLowerCase()})`
-    );
+    if (mode === "extract") {
+      setLines(formulaDiv, [
+        "net = total / (1 + rate/100)",
+        "tax = total − net"
+      ]);
+    } else {
+      setLines(formulaDiv, [
+        "tax = net × (rate / 100)",
+        "total = net + tax"
+      ]);
+    }
     resultSpan.textContent = "→ invalid";
-    setResult("taxResult", result.error, true);
-    return;
+    setResult("taxResult", "Value out of range", true);
   }
-
-  if (mode === "extract") {
-    setLines(formulaDiv, [
-      `net = ${amount} / (1 + ${rate}/100) = ${result.netText}`,
-      `tax = ${amount} − ${result.netText} = ${result.taxText}`
-    ]);
-  } else {
-    setLines(formulaDiv, [
-      `tax = ${amount} × (${rate} / 100) = ${result.taxText}`,
-      `total = ${amount} + ${result.taxText} = ${result.totalText}`
-    ]);
-  }
-  resultSpan.textContent = `→ ${result.liveResult}`;
-  setResult("taxResult", result.label);
-
-  lastValidCalc.tax = {
-    calculator: "tax",
-    calculatorLabel: mode === "extract" ? "Tax / VAT (Extract)" : "Tax / VAT (Add)",
-    inputA: getRawInput("taxAmount"),
-    inputB: getRawInput("taxRate"),
-    mode,
-    inputsText:
-      mode === "extract"
-        ? `${amount} incl. ${rate}% tax`
-        : `${amount} + ${rate}% tax`,
-    resultText:
-      mode === "extract"
-        ? `Net: ${result.netText} · Tax: ${result.taxText}`
-        : `Total: ${result.totalText} · Tax: ${result.taxText}`,
-    copyText: result.copyText
-  };
 }
 
 function formatHistoryTime(timestampMs) {
@@ -535,8 +631,8 @@ async function restoreHistoryEntry(entry) {
     tax: { a: "taxAmount", b: "taxRate", fn: updateTaxLive }
   };
 
+  if (!entry || !Object.hasOwn(map, entry.calculator)) return;
   const target = map[entry.calculator];
-  if (!target) return;
 
   if (entry.calculator === "tax" && entry.mode) {
     await setTaxMode(entry.mode, false);
@@ -702,12 +798,14 @@ function closeAboutModal() {
 async function syncAppInfo() {
   try {
     const appInfo = await invoke("get_app_info");
-    document.getElementById("appVersion").innerText = `Desktop v${appInfo.version}`;
+    document.getElementById("appVersion").textContent = `Desktop v${appInfo.version}`;
     document.getElementById("aboutAppName").textContent = appInfo.name;
     document.getElementById(
       "aboutVersionPill"
     ).textContent = `Desktop v${appInfo.version} · Tauri v2 + Rust`;
     document.getElementById("aboutPrivacyText").textContent = appInfo.privacy;
+    const webAppEl = document.getElementById("webAppUrlText");
+    if (webAppEl) webAppEl.textContent = WEB_APP_URL;
     if (typeof appInfo.historyLimit === "number") {
       historyLimit = appInfo.historyLimit;
     }
@@ -725,6 +823,11 @@ function bindControls() {
   document
     .getElementById("aboutBtn")
     .addEventListener("click", openAboutModal);
+  document
+    .getElementById("copyWebUrlBtn")
+    ?.addEventListener("click", (event) => {
+      copyText(WEB_APP_URL, event.currentTarget);
+    });
 
   document
     .getElementById("closeAboutBtn")
@@ -1076,6 +1179,14 @@ async function runSmokeTestIfRequested() {
     el.dispatchEvent(new Event("input", { bubbles: true }));
     return waitFn();
   };
+  const waitUntilCopied = async (btnId) => {
+    const btn = document.getElementById(btnId);
+    for (let i = 0; i < 20; i++) {
+      if (btn?.textContent === "copied") return true;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    return btn?.textContent === "copied";
+  };
   const text = (id) => document.getElementById(id).innerText.trim();
   const failures = [];
   const check = (name, ok) => {
@@ -1087,7 +1198,7 @@ async function runSmokeTestIfRequested() {
 
     const appInfo = await invoke("get_app_info");
     check("app-name", appInfo.name === "Percentage Calculator Tool");
-    check("app-version", appInfo.version === "2.1.0");
+    check("app-version", appInfo.version === "2.1.1");
     check(
       "app-credits",
       appInfo.credits.includes("Mohamed Sayed") &&
@@ -1096,7 +1207,9 @@ async function runSmokeTestIfRequested() {
     );
     check(
       "footer-version",
-      document.getElementById("appVersion").innerText.includes("Desktop v2.1.0")
+      document
+        .getElementById("appVersion")
+        .textContent.includes("Desktop v2.1.1")
     );
 
     await setInput("changeOrig", "150", updateChangeLive);
@@ -1201,11 +1314,7 @@ async function runSmokeTestIfRequested() {
     );
 
     document.getElementById("copyPercentBtn").click();
-    await new Promise((resolve) => setTimeout(resolve, 80));
-    check(
-      "copy-feedback",
-      document.getElementById("copyPercentBtn").innerText === "copied"
-    );
+    check("copy-feedback", await waitUntilCopied("copyPercentBtn"));
 
     document.getElementById("clearAllBtn").click();
     check("clear-changeOrig", document.getElementById("changeOrig").value === "");
@@ -1257,6 +1366,13 @@ async function runSmokeTestIfRequested() {
         text("aboutModal").includes("Ahmed Emara") &&
         text("aboutModal").includes("Antigravity")
     );
+    check(
+      "about-modal-web-url",
+      text("aboutModal").includes("OFFICIAL WEB APP") &&
+        document.getElementById("webAppUrlText")?.textContent === WEB_APP_URL
+    );
+    document.getElementById("copyWebUrlBtn").click();
+    check("about-copy-web-url", await waitUntilCopied("copyWebUrlBtn"));
     document.getElementById("closeAboutBtn").click();
     check("about-modal-closed", aboutModal.classList.contains("hidden"));
 

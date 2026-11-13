@@ -12,30 +12,54 @@ permissions:
 
 jobs:
   rust-checks:
-    name: Rust Core Tests & Lints
+    name: Rust Core Tests & Web Asset Checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Run percent-core unit + 10k golden parity tests
-        run: cargo test -p percent-core -- --nocapture
+        run: cargo test -p percent-core --locked -- --nocapture
       - name: Clippy on percent-core
-        run: cargo clippy -p percent-core --all-targets -- -D warnings
-      - name: Verify mobile/index.html 10k golden parity
+        run: cargo clippy -p percent-core --all-targets --locked -- -D warnings
+      - name: Verify mobile/index.html 10k parity, CSP hashes & UI/mobile DOM hygiene
         run: |
           node -e '
             const fs = require("fs");
             const vm = require("vm");
+            const crypto = require("crypto");
             const assert = require("assert");
+
             const html = fs.readFileSync("mobile/index.html", "utf8");
+            const styleMatch = html.match(/<style>([\s\S]*?)<\/style>/);
             const scriptMatch = html.match(/<script>([\s\S]*?)<\/script>/);
+            assert(styleMatch && scriptMatch, "Missing <style> or <script> in mobile/index.html");
+
+            const cspMatch = html.match(/<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]+)"/i);
+            assert(cspMatch, "Missing CSP <meta> tag in mobile/index.html");
+            const csp = cspMatch[1];
+
+            const styleHash = crypto.createHash("sha256").update(styleMatch[1], "utf8").digest("base64");
+            const scriptHash = crypto.createHash("sha256").update(scriptMatch[1], "utf8").digest("base64");
+            assert(csp.includes(`'\''sha256-${styleHash}'\''`), `CSP missing style hash sha256-${styleHash}`);
+            assert(csp.includes(`'\''sha256-${scriptHash}'\''`), `CSP missing script hash sha256-${scriptHash}`);
+            assert(!/frame-ancestors/i.test(csp), "CSP <meta> must not include frame-ancestors");
+
+            const uiMain = fs.readFileSync("ui/main.js", "utf8");
+            const swCode = fs.readFileSync("mobile/sw.js", "utf8");
+            for (const src of [uiMain, scriptMatch[1], swCode]) {
+              assert(!/\.innerHTML\b|\.outerHTML\b|\beval\s*\(|\bnew\s+Function\b/.test(src), "Forbidden DOM/eval sink detected");
+            }
+
             const fnStart = scriptMatch[1].indexOf("function formatDecimal");
             const fnEnd = scriptMatch[1].indexOf("// --- Persistent on-device history");
+            assert(fnStart !== -1 && fnEnd > fnStart, "Could not locate math engine boundaries");
             const ctx = { Number, Math };
             vm.runInNewContext(scriptMatch[1].slice(fnStart, fnEnd), ctx);
             const parseNum = (s) => (s === "NaN" ? NaN : s === "Infinity" ? Infinity : s === "-Infinity" ? -Infinity : Number(s));
@@ -56,7 +80,7 @@ jobs:
                 else { assert.strictEqual(act.ok, "false"); assert.strictEqual(act.error, c.r.error); }
               }
             }
-            console.log(`Mobile HTML parity verified (${cases.length} cases).`);
+            console.log(`Mobile HTML parity & CSP verified (${cases.length} cases).`);
           '
 
   windows-build:
@@ -64,84 +88,120 @@ jobs:
     needs: rust-checks
     runs-on: windows-latest
     permissions:
-      contents: write
+      contents: read
+    outputs:
+      version: ${{ steps.stage.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           components: clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: ". -> target"
 
       - name: Clippy on full workspace (Windows)
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Run full workspace unit tests (Windows)
+        run: cargo test --workspace --locked
 
       - name: Install Tauri CLI
         run: cargo install tauri-cli --version "=2.12.4" --locked
 
       - name: Build Windows installers (NSIS + MSI) and release binary
-        run: cargo tauri build
+        run: cargo tauri build -- --locked
 
       - name: Run real Tauri window smoke test
         run: .\target\release\percentage-calculator-tool.exe --smoke-test
 
-      - name: Stage clean deliverables (Installer + Portable + Mobile HTML)
+      - name: Stage clean deliverables & SHA256SUMS (Installer + Portable + Mobile HTML)
+        id: stage
         shell: pwsh
         run: |
-          $ver = "2.1.0"
+          $conf = Get-Content "src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json
+          $ver = $conf.version
           New-Item -ItemType Directory -Force -Path dist/Installer, dist/Portable, dist/Mobile | Out-Null
           Copy-Item "target/release/bundle/nsis/*setup*.exe" "dist/Installer/"
           Copy-Item "target/release/bundle/msi/*.msi" "dist/Installer/"
-          Copy-Item "target/release/percentage-calculator-tool.exe" "dist/Portable/Percentage Calculator Tool Portable $ver.exe"
-          Copy-Item "mobile/index.html" "dist/Mobile/Percentage Calculator Tool Mobile $ver.html"
+          Copy-Item "target/release/percentage-calculator-tool.exe" "dist/Portable/Percentage.Calculator.Tool.Portable.$ver.exe"
+          Copy-Item "mobile/index.html" "dist/Mobile/Percentage.Calculator.Tool.Mobile.$ver.html"
+
+          $files = Get-ChildItem -Path dist/Installer, dist/Portable, dist/Mobile -File | Sort-Object Name
+          $lines = foreach ($f in $files) {
+            $hash = (Get-FileHash -Path $f.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            $releaseAssetName = $f.Name.Replace(" ", ".")
+            "$hash  $releaseAssetName"
+          }
+          Set-Content -Path "dist/SHA256SUMS.txt" -Value $lines -Encoding utf8NoBOM
+          "version=$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8NoBOM
           Get-ChildItem -Recurse dist
+          Get-Content dist/SHA256SUMS.txt
 
       - name: Upload Windows deliverables
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: Percentage-Calculator-Tool-Windows-v2.1.0
+          name: Percentage-Calculator-Tool-Windows-v${{ steps.stage.outputs.version }}
           path: dist/**
           if-no-files-found: error
 
+  release:
+    name: Publish GitHub Release
+    needs: [rust-checks, windows-build]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Download staged deliverables
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: Percentage-Calculator-Tool-Windows-v${{ needs.windows-build.outputs.version }}
+          path: dist
+
       - name: Publish GitHub Release on main or version tag
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
-        shell: pwsh
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if ($env:GITHUB_REF -like "refs/tags/v*") {
-            $tag = $env:GITHUB_REF_NAME
-          } else {
-            $conf = Get-Content "src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json
-            $tag = "v$($conf.version)"
-          }
-          $existing = gh release view $tag 2>$null
-          if ($LASTEXITCODE -eq 0) {
-            Write-Host "Release $tag already exists; attaching updated mobile HTML asset."
-            gh release upload $tag `
-              (Get-Item "dist/Mobile/*.html").FullName `
-              --clobber
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            TAG="$GITHUB_REF_NAME"
+          else
+            TAG="v${{ needs.windows-build.outputs.version }}"
+          fi
+
+          shopt -s nullglob
+          ASSETS=(
+            dist/Installer/*setup*.exe
+            dist/Installer/*.msi
+            dist/Portable/*.exe
+            dist/Mobile/*.html
+            dist/SHA256SUMS.txt
+          )
+          test "${#ASSETS[@]}" -ge 5
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; updating assets and SHA256SUMS.txt."
+            gh release upload "$TAG" "${ASSETS[@]}" --clobber
             exit 0
-          }
-          $notesFile = ".github/release-notes-$tag.md"
-          if (Test-Path $notesFile) {
-            gh release create $tag `
-              (Get-Item "dist/Installer/*setup*.exe").FullName `
-              (Get-Item "dist/Installer/*.msi").FullName `
-              (Get-Item "dist/Portable/*.exe").FullName `
-              (Get-Item "dist/Mobile/*.html").FullName `
-              --target $env:GITHUB_SHA `
-              --title "Percentage Calculator Tool Desktop $tag (Tauri v2 + Rust)" `
-              --notes-file $notesFile
-          } else {
-            gh release create $tag `
-              (Get-Item "dist/Installer/*setup*.exe").FullName `
-              (Get-Item "dist/Installer/*.msi").FullName `
-              (Get-Item "dist/Portable/*.exe").FullName `
-              (Get-Item "dist/Mobile/*.html").FullName `
-              --target $env:GITHUB_SHA `
-              --title "Percentage Calculator Tool Desktop $tag (Tauri v2 + Rust)" `
+          fi
+
+          NOTES_FILE=".github/release-notes-${TAG}.md"
+          if [[ -f "$NOTES_FILE" ]]; then
+            gh release create "$TAG" "${ASSETS[@]}" \
+              --target "$GITHUB_SHA" \
+              --title "Percentage Calculator Tool Desktop $TAG (Tauri v2 + Rust)" \
+              --notes-file "$NOTES_FILE"
+          else
+            gh release create "$TAG" "${ASSETS[@]}" \
+              --target "$GITHUB_SHA" \
+              --title "Percentage Calculator Tool Desktop $TAG (Tauri v2 + Rust)" \
               --generate-notes
-          }
+          fi
 

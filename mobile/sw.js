@@ -1,4 +1,4 @@
-const CACHE_NAME = "pct-tool-v2.1.0-mobile-1";
+const CACHE_NAME = "pct-tool-v2.1.1-mobile-1";
 const PRECACHE_URLS = [
   "./",
   "./index.html",
@@ -39,11 +39,18 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
+  const scopePathname = new URL(self.registration.scope).pathname;
+  if (!url.pathname.startsWith(scopePathname)) return;
 
   const networkFetch = caches.open(CACHE_NAME).then((cache) =>
     fetch(request)
       .then((response) => {
-        if (response && response.status === 200 && response.type === "basic") {
+        if (
+          response &&
+          response.status === 200 &&
+          response.type === "basic" &&
+          !response.redirected
+        ) {
           return cache.put(request, response.clone()).then(() => response);
         }
         return response;

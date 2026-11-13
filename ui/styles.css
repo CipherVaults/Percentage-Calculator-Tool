@@ -582,6 +582,22 @@ body {
   line-height: 1.5;
 }
 
+.about-url-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  margin-top: 0.45rem;
+}
+
+.about-url-text {
+  color: #E9A715;
+  font-size: 0.73rem;
+  word-break: break-all;
+  user-select: all;
+}
+
 .modal-footer {
   display: flex;
   justify-content: flex-end;

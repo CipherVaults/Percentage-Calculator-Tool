@@ -28,3 +28,8 @@ Desktop.ini
 
 # Temporary install smoke-test folders
 pct-install-smoke/
+
+# Local secrets and key material (defense in depth)
+.env*
+*.pem
+*.key

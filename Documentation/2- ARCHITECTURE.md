@@ -119,6 +119,18 @@ On every push and pull request, GitHub Actions runs:
 2. `cargo clippy --workspace`, `cargo tauri build`, and `percentage-calculator-tool.exe --smoke-test` on `windows-latest`.
 3. Uploads clean Windows deliverables (`dist/Installer/` with NSIS `.exe` and `.msi`, plus `dist/Portable/Percentage Calculator Tool Portable 2.1.0.exe`).
 
+Every push and pull request runs `build.yml` on Linux and `windows-latest`, while pushes touching `mobile/**` deploy the offline PWA via `.github/workflows/pages.yml`.
+
+---
+
+### 6. Mobile & Web Standalone PWA (`mobile/`)
+
+To run v2.1.0 directly on iPhone (Safari → Add to Home Screen) and Android (Chrome → Install app) or as a standalone single HTML file:
+
+- `mobile/index.html` bundles all CSS, JavaScript, and the fallback icon inline, matching `percent-core` math across all 10,661 golden test cases.
+- Safe-area viewport insets (`viewport-fit=cover`, `env(safe-area-inset-*)`), `16px` mobile inputs (preventing iOS Safari focus zoom), quick-jump navigation pills, and `localStorage` persistence (500-entry FIFO history) adapt the terminal UI cleanly for touch screens.
+- `mobile/manifest.webmanifest`, `mobile/sw.js` (stale-while-revalidate offline cache), and `mobile/icons/` (`180x180` Apple touch icon, `192x192`, `512x512`, and `maskable` adaptive Android icon) enable Home Screen installation and full offline execution.
+
 ---
 
 ## Internal Structure
@@ -127,9 +139,10 @@ On every push and pull request, GitHub Actions runs:
 Cargo.toml              workspace manifest
 crates/percent-core/    pure Rust math crate + unit & golden tests
 src-tauri/              Tauri v2 shell, commands, capabilities, icons
-ui/                     static HTML, CSS, and JS controller
+ui/                     desktop static HTML, CSS, and JS controller
+mobile/                 standalone single-file HTML, SW, manifest, mobile icons
 assets/                 source icon files
-reference/              original single-file HTML source
+reference/              original single-file HTML source (v1.1)
 Documentation/          project explanation and development record
-.github/workflows/      automated CI and Windows build pipeline
+.github/workflows/      automated CI, Windows builds, and GitHub Pages PWA deploy
 ```

@@ -94,6 +94,16 @@ The app keeps the exact look, feel, and results of v1.1 while shipping as a smal
 
 ---
 
+## Phase 9 - Mobile & Web Standalone HTML / PWA Edition (v2.1.0)
+**Status: Completed**
+
+- created `mobile/index.html` as a self-contained single-file HTML & offline PWA for **iPhone (Safari → Add to Home Screen)** and **Android (Chrome → Install app)** with `10,661`-case parity against `percent-core`
+- added `mobile/manifest.webmanifest`, offline Service Worker (`mobile/sw.js`), `180x180` Apple Touch Icon, and `192x192` / `512x512` / `maskable` Android icons
+- added mobile ergonomics: safe-area insets (`viewport-fit=cover`), `16px` touch inputs to prevent iOS focus zoom, horizontal card quick-jump bar, `localStorage` 500-entry history, and an in-app install guide modal
+- added `.github/workflows/pages.yml` to deploy `mobile/` to GitHub Pages and updated `.github/workflows/build.yml` to verify 10k parity and attach the standalone mobile HTML to releases
+
+---
+
 ## Optional Future Work
 
 Future improvements can include:

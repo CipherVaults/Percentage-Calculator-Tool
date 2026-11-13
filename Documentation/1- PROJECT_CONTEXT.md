@@ -59,7 +59,8 @@ In **v1.0–v1.1** the desktop shell used Electron. In **v2.0.0** the app was re
 - real-window Tauri smoke test (`--smoke-test`)
 - Windows NSIS and MSI installer builds
 - Windows standalone portable executable
-- GitHub Actions CI workflow for automated Windows builds and tests
+- standalone single-file Mobile & Web PWA HTML edition (`mobile/`) for iPhone Safari (Add to Home Screen) and Android Chrome (Install app)
+- GitHub Actions CI workflows for automated Windows builds, tests, and GitHub Pages deployment
 - project documentation modeled after the AI Ambassadors documentation structure
 
 ---
@@ -88,15 +89,15 @@ The project intentionally does not include:
 - cloud sync
 - telemetry
 - analytics
-- external database servers (only a single local JSON history file in the user's app data directory)
-- network calls
+- external database servers (desktop stores a single local JSON history file in app data; mobile/web stores up to 500 entries locally in `localStorage`)
+- runtime network calls
 - auto-updater
 - paid code signing
 - custom Discord-style title bar
 - complex theming system
 - React or another frontend framework
-- mobile builds
-- macOS or Linux release installers (the codebase is portable, but release packaging targets Windows)
+- native iOS/Android App Store binaries (mobile support uses the self-contained HTML + offline PWA in `mobile/` rather than App Store wrappers)
+- macOS or Linux release installers (the codebase is portable, but release packaging targets Windows and web/PWA)
 
 These exclusions keep the app small, understandable, and aligned with its original utility purpose.
 

@@ -26,6 +26,38 @@ jobs:
         run: cargo test -p percent-core -- --nocapture
       - name: Clippy on percent-core
         run: cargo clippy -p percent-core --all-targets -- -D warnings
+      - name: Verify mobile/index.html 10k golden parity
+        run: |
+          node -e '
+            const fs = require("fs");
+            const vm = require("vm");
+            const assert = require("assert");
+            const html = fs.readFileSync("mobile/index.html", "utf8");
+            const scriptMatch = html.match(/<script>([\s\S]*?)<\/script>/);
+            const fnStart = scriptMatch[1].indexOf("function formatDecimal");
+            const fnEnd = scriptMatch[1].indexOf("// --- Persistent on-device history");
+            const ctx = { Number, Math };
+            vm.runInNewContext(scriptMatch[1].slice(fnStart, fnEnd), ctx);
+            const parseNum = (s) => (s === "NaN" ? NaN : s === "Infinity" ? Infinity : s === "-Infinity" ? -Infinity : Number(s));
+            const cases = JSON.parse(fs.readFileSync("crates/percent-core/tests/fixtures/golden.json", "utf8"));
+            for (const c of cases) {
+              if (c.f === "formatDecimal") assert.strictEqual(ctx.formatDecimal(parseNum(c.a[0])), c.r);
+              else if (c.f === "discount") {
+                const act = ctx.calcDiscount(parseNum(c.a[0]), parseNum(c.a[1]));
+                assert.strictEqual(act.label, c.r.label);
+                assert.strictEqual(act.copyText, c.r.copyText);
+              } else {
+                const a = parseNum(c.a[0]), b = parseNum(c.a[1]);
+                const act = c.f === "percentageChange" ? ctx.calcChange(a, b)
+                  : c.f === "percentageOfTotal" ? ctx.calcPercentOfTotal(a, b)
+                  : c.f === "percentagePortion" ? ctx.calcPortion(a, b)
+                  : ctx.calcOriginal(a, b);
+                if (c.r.ok) { assert.strictEqual(act.ok, "true"); assert.strictEqual(act.label, c.r.label); }
+                else { assert.strictEqual(act.ok, "false"); assert.strictEqual(act.error, c.r.error); }
+              }
+            }
+            console.log(`Mobile HTML parity verified (${cases.length} cases).`);
+          '
 
   windows-build:
     name: Windows Build, Smoke Test & Bundles
@@ -54,14 +86,15 @@ jobs:
       - name: Run real Tauri window smoke test
         run: .\target\release\percentage-calculator-tool.exe --smoke-test
 
-      - name: Stage clean deliverables (Installer + Portable)
+      - name: Stage clean deliverables (Installer + Portable + Mobile HTML)
         shell: pwsh
         run: |
           $ver = "2.1.0"
-          New-Item -ItemType Directory -Force -Path dist/Installer, dist/Portable | Out-Null
+          New-Item -ItemType Directory -Force -Path dist/Installer, dist/Portable, dist/Mobile | Out-Null
           Copy-Item "target/release/bundle/nsis/*setup*.exe" "dist/Installer/"
           Copy-Item "target/release/bundle/msi/*.msi" "dist/Installer/"
           Copy-Item "target/release/percentage-calculator-tool.exe" "dist/Portable/Percentage Calculator Tool Portable $ver.exe"
+          Copy-Item "mobile/index.html" "dist/Mobile/Percentage Calculator Tool Mobile $ver.html"
           Get-ChildItem -Recurse dist
 
       - name: Upload Windows deliverables
@@ -85,7 +118,10 @@ jobs:
           }
           $existing = gh release view $tag 2>$null
           if ($LASTEXITCODE -eq 0) {
-            Write-Host "Release $tag already exists; skipping."
+            Write-Host "Release $tag already exists; attaching updated mobile HTML asset."
+            gh release upload $tag `
+              (Get-Item "dist/Mobile/*.html").FullName `
+              --clobber
             exit 0
           }
           $notesFile = ".github/release-notes-$tag.md"
@@ -94,6 +130,7 @@ jobs:
               (Get-Item "dist/Installer/*setup*.exe").FullName `
               (Get-Item "dist/Installer/*.msi").FullName `
               (Get-Item "dist/Portable/*.exe").FullName `
+              (Get-Item "dist/Mobile/*.html").FullName `
               --target $env:GITHUB_SHA `
               --title "Percentage Calculator Tool Desktop $tag (Tauri v2 + Rust)" `
               --notes-file $notesFile
@@ -102,6 +139,7 @@ jobs:
               (Get-Item "dist/Installer/*setup*.exe").FullName `
               (Get-Item "dist/Installer/*.msi").FullName `
               (Get-Item "dist/Portable/*.exe").FullName `
+              (Get-Item "dist/Mobile/*.html").FullName `
               --target $env:GITHUB_SHA `
               --title "Percentage Calculator Tool Desktop $tag (Tauri v2 + Rust)" `
               --generate-notes

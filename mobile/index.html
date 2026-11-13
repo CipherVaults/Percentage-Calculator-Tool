@@ -1,0 +1,2538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0E0F12">
+  <meta name="color-scheme" content="dark">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Percent Tool">
+  <meta name="application-name" content="Percent Tool">
+  <meta name="description" content="Offline percentage, discount, markup & profit margin, and reverse tax/VAT calculator with local history for iPhone, Android, and desktop browsers.">
+  <title>Percentage Calculator Tool • Mobile</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="180x180" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAIAAACyr5FlAAAQvklEQVR42u2daZBdxXXH/6e77/bezBvNSFgIIQESCAxI7IiSjMMiYRkoAUXA4ASXCcYEioAxTqhQSZXteEkpxA7gLcFFYTsEgo0RcgDbYY8AW4RdgAAhsNAK0kgzb71L98mH96SZkSb+II1Go/vOr/RFVW/eTN3+3dOnl9NNpa4eCMJwKHkEgsghiByCyCGIHILIIYgcgsghiByCyCGIHIIgcggihyByCCKHIHIIIocgcggihyByCG2H2Z0fJgKRPMMxjXN7SY7MIk7l+Y/hfoHge1A0unIQIckwfX/MP4YkeIxBmGE0ba7ww//L5TqMAo+aHIqQpJgxmf7+M8poWLfregp7AutQCPDGB7T0Dbe1yp4Bu9GSAwAIzqGRQls4J8nHmEs1iBCnYGYAuxI3dksOBm3LSSUzHWuMSKPIUFbYM6OV/yeg7Er3Jux2rBj5tG/k5TAKQcDSWKMrBqxDnBKPWTmY4Rus3qSeesNYB0lCRi29yCzGd/AZM7NCyCP45EdSDsfwDL+7QX3j50GcQSuwRJA9j1aoxjRzqp09I+uMkPGIDQ5GvltRCoEHAFqLHKOBUsgs+2bkB4wjLwcYzGCAWeQYDVpPe1cnM2QoK4gcgsghiByCyCGIHILIIYgcgsghiByCIHIIIocgcggihyByCCKHIHII+z5m7/8JBK21tMQOMLOzrr3lILjMVbfWuFm/J9sKARDg2Pgm7AjbVw4iyrKsNL505p+fFnaELrNSVNmMGZ5vNry38cVHX3HWkdpr74zZy2HDcrFUmHP+7O6J49I4I6nVB5xzUTF89anlLz32KgAC8V6yYy93KwQ45+qVuh/5WSJyNOVgZ11ciyUhBTtuVGI/rIscLTksc+bietLWcrBj45vN63p/eMOPSaontz8WgMDMYGYi4r1X/GPGwrPgTMryh+lx9/qBWmYMPASQlrm4nd8Z3usDezMmHoSUTY5J5JUVRA5B5BBEDkHkEGS0MprD5sGTbTJIEjkAQCsQIbXgQeepGQ0iWCeWtKscikCESoPiFF0F9nRrbokZ/TWyjM6Qm8e3C+0lh1aoJ8gsZh2cHT/NnTDNdkZsLUghzfD2OvXaar3sbbO5QqUCE+AkhLSDHEQgoFzHxw90XzgzOWNWetAETu1A8xPge+ir0avv63uf8X7xrK8Ue1r8aAc5gGqMc0/Mvn5JY8p4V4vpo/4dV7K4Bq1w8mHZidOzE6dnX78vilMY8SPfcmiF/jqdd1J62xV1rdBbIaVghtvFzEC5TgR8/vS0GOCGOyPLUCQpak7nObRCpUHHHWz/4dKGIq7FMHrIofGDG562DWQ29dMFp6RXfzqpNWTLUV7lIDiG0XzVWfHkHldLaHDAcAzHUArMQ4YnRFCEekKfPz0+5mBbacgmgjzKoQmVOh17sJ03K+urDTXDIfRQDGAdfA/FcEgIUQqNBAd089knpsxSI5HfnOOoKa67g3srAwHAOYQ+1m+he5b676xT3Z183snp7MNsnAyUQyhCnNEJh7ieDq7GMG1/dnuu5GheOxL5fOJ0m2RDehPfw+YyXX9n9PhrphhyktHiZd5d19bmHJ6V6y2HmrcaHjUl64xcX017pt03IeWrW6HmlZmY3OMcDwxcmRF4/MRy8+TrZlI3FwPsV+ItFbrzcb+ekNl+9QfBMTpCRP4f61YUtWZdRY59DAaI0BHx4LdeEdKMVm5QoYfMwTqkGSKfP9ikKg3sUKjLQFdx+BsIiKAVGgmqDTjO/375fCbljoGhbacIoTdw/y0RwNA0zJQGAdYOP0IGo7dCR0+1N10QF3ykNue36eYtISXAOWypDJkMdQyleNZBmdFBmqGZYZQbdMJ021VAnO4gEvfVdwwYilCN4WlcOT+57ux42kRnNL71y9DP9bAmX5GDQQqJxaqNavAlYkqhFtMnj7RXnplYh8yiFuOTR9orzoy5VUTU+nGjsbZX1ZrzHNwKGMzoq9JhB7gfXVX/9p81ejr4w366+lPJn56S9NXyPCNi8uUGNKGS0Avv6i/OT7Y3Om27zuhvL2x84shs1UbqKmD+rKyjwHE60DVYh06PX/mD2VIjoxmAUajGpDVfMS+57px4Urcr11sbhjKHmy+MX1+jX1+tOyJ2TuTYF/zwDL/0nn57nTpwPMfZQJLhGOxw5sz0rGPAjHpKaTokaWh+5pkVpr9GEzo5ydBXo6On2r8+P/70sVli0VclrUEAAY0UE0q86LL6FT8obq3k80K7vMVE51AM8fZ6ff/vvEIw5IVung1TjamvRv11skNPA8ksOkN++T39yAteV8SVBlmHK+Yl/3FD7ezj03IDSQajW7Eoc9AE33BHhIldLsvpPak5nCG1DsWQf/qU/4mP27mHZ71V8vRAukqEnVvSOgQeagm+86twU5kAHHGgven8eMFxaZJSX42MGohM1qEYwDn+8WP+bQ+Fm/sRevlc5c+hHMzwNDb30813hz/4Yv2oKXZrlZqj2aYgtK2ZmymndYh8kMI374+WLDPjS3zx3OS6c5LJ3a6/RiCYQXPwROgq8Io1etGD4SMvaqMReLnd/5HPtZVm57Jirb78e4WvXtxYcFxqmdIMzsEBjlv7xJSCUtzl4/2P1NfuC+9d6s+ekd24MF5wbJpa2jo4YDAsI/JgNO5Z6i96IFjbq0oFbv4uGa3se51LR8hrNtM1d0TzZnmX/Uky8yDrG3gKnkZmYR1Si01b1G9e9u541P/DR+r6c+NrF8QH9Li+GtGggNGcOusu8rsb9HeW+A8s8xRhXJEzi3yT5w3Gzf4idXhwmffoq2b/cTzzoKxUwORu3lSm/jpWf6TeWqfXbFYzp2b3fLk6b5ZNM2ytDlnob34JCPc9493yYLhqo+oscPP6+NyT893n1kETSgXOLD7YRKs+9JjhHCliz6CRUujxX53duP6cZOI4V25mGHqgbwKhVOD3N6pblgQP/N5ThHEdbF2eu5I2kmN7uqAUAoWQAEApbhatHHmgvfnC+Kxj0zSjvp0CRuDB9/j+57x/Whys+lB3Ru0SMNpIju2KMEAMpVBtgBkXzUlvXNg4+GOuXCNgmICxrlfd+lB471LPOfR0cGrbJWC0nRwYtEoyfX/7lYXxebOz5n8HB4zMIvThGX7kJe+WB4PXV+tiwKxQqcNoKAWtAYbjttgk1hZyEEETagnAuGRu8uXzkmkTbX+NmjuDWgGDwYyuIq/fom5/OLzrCb/aQBSACIWAD+jmLVWqJdRbJt9w6KEdKijboFZWgRlbazR9or1xYXLB7NQxtlRIK6htg9WsmWEY/Pol79u/DF5YaWZMtvOPSU861O4/jkOfSxG2VJBYWrlBPfmaWbrCVBpUDJhzXapv8h0wlEI9JjA+Mzf5ysL44I9xuY6dA0Yp4s1luuO/g9seDrTC313UuHhOOmWC9T0QkFk4R3oSa4VTj8Clc9OX39ffeyR47FUd+tAkM6T7YIbhmhnGxFaG4Rhbq9B6yBq9bxD5/MRys2hx8OxbZvpE94+XNT51bNpIKE6plgBoLcMyiLm1U/DkQ7M7r7G3PRzc/rAPagUnkWOfiRnVmBT4krnJDQvj6RNd39AhCTMco1TgTX1q0eLgZ0/5fTWa3OO+e3njjJnp5jIpBUUwNPzAp9wgo3DTBQ1mfPdXfiEUOfYdM6zFjEn2mgXJhaek1mFrdch+LetgNIoeP7ncLFocLntHjyuyb/hL58anz0w3lQdWcbfb0Pza7d9vCM6hv0ZfOjdesVYted7r7sjhbHoO97gpQiOly05LLp8XlxuIt20abTZz5tAZsXW4ZUl4xfcLL72nJ5S4luDIA915J6W1nQohrUOzCNu6IbmFUsgsPM1XzksmdLokzWGxQg7lYIZn+CdP+C+uNEV/oMjAOmiF7iL/7m3zuduL/7wkcIyOkDMHa2n+MdkBPdwYtDesub20M+IkRV+VOiMOvSHdh9Hor9PsGdlJh9pqTDp3cuSwW3GM0MMba/Q3fhH+21/WtIJlMKMj4nKdfrgk/Nff+H016oy4WVedWYwv8ZwjsjglNehlIcAzfPfT/n3P+s7x5B6+ekF89FRXjzH4Y0rh+On2sdeMZZFjX8A6dBf5t6+YOx71rzs7LjeoVOBl75hv3R8895aJAi5FrZsalEJqqRTZmQfZOBvoGqxDKeIlz3t/89PIMrTC0jfx5lp117X1KRNsI2lpRIQ0o5lTbeDBubwNW3K7r94xCj7f+lDw9JumGOC2/wouu7Xw+3d0qcBaYYc7PDojhGagXZmhFaoNevB5zzruKXIx4Ek9vHy1XrpCbz9ybvuHJ3SyVjmsYMntPAcztEY9xlf/M5wy3v32ZeN76AiHm/NmFAMMrl9B6wQYrN9CnkFiW+t2oYd3N6rU7nC6CxcCzmXpbJ5nSJ1D5GPlevXmGl0IuVmDv7MZAJKMdyh9ZcBoFIJWFMksjELm0BW1gsTgkoZGQrmc58j5ATaO4RkUQ27Oeg03KwIQyvUh5ZNESDN0Ffi0o7L+OjVrYst1Cj2ee7iloffDNA85FTn21f7lj+3DYGiFcp1WbVDeoMIkRYhTuvTU9AtnJqEHBvbvdl+7pHH8dFuJafDEiVZY9aFKm9VT+VKkvc4+Hza0+Jo3l2nZSn30VFtPSOlWPMgsigF/87ONS09Neys4ZCLPmOSq8dCz5wBP8/Pv6HpCXUXO2SJ+u8sBQGvEdXr8NXPRnLRZ1Ug04AcRTpqeGY1GSuU6dpiGLwa8/AP9zFsm8FjKIfM4KWLRWeDHXzP/87opRUOWSJoVlOUG9VaokWKHmXVm+Ab3PeOt2qiiIIcL9yJHa+hhHRY9GHywSZUKnNohCatWw5xkmlqML/GvX/J+9pRfKrDN48ZjkaOVeRQCLF+tb/xJ9OFW1VVg5lbhU3OGg7et8lvXWorr6cDTy83Nd4f1BJryeYaLyDGQQHRE/ORy89l/KTy7woQ+xnVwR4jtZy6Qgm/QGXGpwI5x5+PeX3y/sGErRb7sBGuH+OHQGfFb69Tnbi/Mn5WdPzudup/br5MLATdPk9pcoY/KesVa+vengxff1UZz5COv5y+IHMPEjyiAtVi8zPz8Oe+QiXbqeJQiRwTL6C2r9z9S63sp9Dn0W1OuOT4yTuQYJn4ohc4IAH+4Va3ZRNa1doYZjcDj8Z2ttf7cV66IHMONXxjNzRmeQeBtW1RjMOB4xxVdkaPdLWlPZLQiiByCyCGIHILIIYgcgsghiByCyCGIHILIIQgihyByCCKHIHIIIocgcggihyByCCKHIHIIgsghiByCyCGIHILIIYwN9kg5pKLWP5YHPArvN0HRHrmzYeTlYCDJkGSt2xiFPS6HQpJRlo38qzjCcjSvT+vu4MSKHKMXOSIfXQUe8VBtRlbhOKWjp9gfXVUXLUYPgmNEHpcitg6KxqQcBDhGZ8THTctI2mx0cYwkHeFTtkc+57CMakPcGPXwQSMZM/aUHM2DOwUZyrZO53QMiRVjrZdp3qe8l+QggGA0jIIjkNgxlrAEX8Po3WoXsztuZBb9VWgtkWMsRo7UolyHax6GuUvXfVCpq2cXzWB0FzFtIu3y7xb2KEqhlmDlOk6yXYwfuyhHK3Y5JOkOd1oJYwUGFCHwdr1n2a2E1Gj4clbl2PbD7capqbvVtm1+TGf+OyZ5BILIIYgcgsghiByCyCGIHILIIYgcgsghiByCIHIIIocgcggihyByCCKHIHIIIoeQV/4PWe2SVRKD+BYAAAAASUVORK5CYII=">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      background: #0E0F12;
+      -webkit-text-size-adjust: 100%;
+    }
+
+    body {
+      background: #0E0F12;
+      font-family: 'SF Mono', ui-monospace, 'Fira Code', 'Cascadia Code', 'JetBrains Mono', monospace;
+      line-height: 1.5;
+      color: #e2e4e8;
+      padding:
+        calc(1.4rem + env(safe-area-inset-top, 0px))
+        calc(1rem + env(safe-area-inset-right, 0px))
+        calc(2rem + env(safe-area-inset-bottom, 0px))
+        calc(1rem + env(safe-area-inset-left, 0px));
+    }
+
+    button,
+    a,
+    input {
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .app {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .header {
+      margin-bottom: 1rem;
+      border-bottom: 1px solid #2a2d35;
+      padding-bottom: 1rem;
+    }
+
+    .header-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+
+    .header h1 {
+      font-size: 1.55rem;
+      font-weight: 500;
+      letter-spacing: 0;
+      color: #E9A715;
+    }
+
+    .header p {
+      font-size: 0.8rem;
+      color: #8f9aaf;
+      margin-top: 0.3rem;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .quick-nav {
+      display: flex;
+      gap: 0.45rem;
+      overflow-x: auto;
+      padding: 0 0 0.85rem 0;
+      margin-bottom: 1.25rem;
+      border-bottom: 1px solid #1e222d;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .quick-nav::-webkit-scrollbar {
+      display: none;
+    }
+
+    .quick-link {
+      background: #161822;
+      border: 1px solid #2a2d35;
+      color: #a3adc2;
+      text-decoration: none;
+      font-size: 0.72rem;
+      padding: 0.42rem 0.72rem;
+      white-space: nowrap;
+      flex-shrink: 0;
+      transition: border-color 0.1s ease, color 0.1s ease;
+    }
+
+    .quick-link:hover,
+    .quick-link:focus-visible {
+      border-color: #E9A715;
+      color: #E9A715;
+      outline: none;
+    }
+
+    .calc-section {
+      background: #161822;
+      margin-bottom: 1.6rem;
+      padding: 1.2rem 1.5rem;
+      border-left: 2px solid #E9A715;
+      scroll-margin-top: 1rem;
+      transition: border-left-color 0.12s ease, background 0.12s ease;
+    }
+
+    .calc-section:hover {
+      border-left-color: #94C59A;
+    }
+
+    .calc-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.8rem;
+    }
+
+    .left-panel {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .section-title-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.45rem;
+    }
+
+    .section-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      letter-spacing: 0;
+      text-transform: uppercase;
+      color: #E9A715;
+      margin-bottom: 0.45rem;
+      border-left: 2px solid #E9A715;
+      padding-left: 0.7rem;
+    }
+
+    .section-title-row .section-title {
+      margin-bottom: 0;
+    }
+
+    .section-subtitle {
+      font-size: 0.74rem;
+      color: #8f9aaf;
+      margin-bottom: 1rem;
+      padding-left: 0.85rem;
+    }
+
+    .input-row {
+      margin-bottom: 0.65rem;
+    }
+
+    .input-row label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: #a3adc2;
+      margin-bottom: 0.25rem;
+      letter-spacing: 0;
+    }
+
+    .input-row input {
+      width: 100%;
+      background: #0E0F12;
+      border: 1px solid #2d313c;
+      border-radius: 0;
+      padding: 0.6rem 0.75rem;
+      font-size: 0.9rem;
+      font-family: inherit;
+      color: #eef2ff;
+      outline: none;
+      transition: border-color 0.1s ease, box-shadow 0.1s ease;
+    }
+
+    .input-row input:focus {
+      border-color: #94C59A;
+      box-shadow: 0 0 0 1px #94C59A;
+    }
+
+    .input-row input::placeholder {
+      color: #4e566a;
+    }
+
+    .swap-row {
+      display: flex;
+      justify-content: flex-end;
+      margin: -0.15rem 0 0.45rem 0;
+    }
+
+    .swap-btn {
+      background: #0E0F12;
+      border: 1px solid #3a3f4c;
+      color: #a3adc2;
+      font-family: inherit;
+      font-size: 0.72rem;
+      padding: 0.28rem 0.72rem;
+      cursor: pointer;
+      transition: border-color 0.1s ease, color 0.1s ease;
+    }
+
+    .swap-btn:hover {
+      border-color: #E9A715;
+      color: #E9A715;
+    }
+
+    .mode-toggle {
+      display: inline-flex;
+      border: 1px solid #3a3f4c;
+      background: #0E0F12;
+    }
+
+    .mode-btn {
+      background: transparent;
+      border: none;
+      color: #8f9aaf;
+      font-family: inherit;
+      font-size: 0.72rem;
+      padding: 0.35rem 0.75rem;
+      cursor: pointer;
+      transition: background 0.1s ease, color 0.1s ease;
+    }
+
+    .mode-btn + .mode-btn {
+      border-left: 1px solid #3a3f4c;
+    }
+
+    .mode-btn:hover {
+      color: #eef2ff;
+    }
+
+    .mode-btn.active {
+      background: #E9A715;
+      color: #0E0F12;
+      font-weight: 600;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      margin: 0.5rem 0 1rem 0;
+      flex-wrap: wrap;
+    }
+
+    .calc-btn {
+      background: #E9A715;
+      border: none;
+      color: #0E0F12;
+      font-family: inherit;
+      font-weight: 600;
+      font-size: 0.82rem;
+      padding: 0.55rem 1.2rem;
+      cursor: pointer;
+      width: auto;
+      letter-spacing: 0;
+      transition: opacity 0.1s ease;
+    }
+
+    .calc-btn:hover {
+      opacity: 0.9;
+    }
+
+    .reset-btn,
+    .copy-btn,
+    .utility-btn {
+      background: transparent;
+      border: 1px solid #3a3f4c;
+      color: #cbd5e6;
+      font-family: inherit;
+      font-size: 0.75rem;
+      padding: 0.45rem 1rem;
+      cursor: pointer;
+      transition: border-color 0.1s ease, color 0.1s ease;
+    }
+
+    .install-btn {
+      border-color: rgba(233, 167, 21, 0.55);
+      color: #E9A715;
+    }
+
+    .reset-btn:hover,
+    .copy-btn:hover,
+    .utility-btn:hover {
+      border-color: #E9A715;
+      color: #E9A715;
+    }
+
+    .copy-btn.copied {
+      border-color: #94C59A;
+      color: #94C59A;
+    }
+
+    .result {
+      background: #0E0F12;
+      border-left: 2px solid #E9A715;
+      padding: 0.75rem 1rem;
+      font-size: 1.06rem;
+      font-family: inherit;
+      margin-top: 0.2rem;
+      word-break: break-word;
+      color: #eef2ff;
+    }
+
+    .result-prefix {
+      color: #E9A715;
+      margin-right: 0.45rem;
+    }
+
+    .error-text {
+      color: #E9A715;
+    }
+
+    .right-panel {
+      background: #0E0F12;
+      padding: 1rem;
+      border: 1px solid #2a2d35;
+      font-size: 0.8rem;
+    }
+
+    .formula-title {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      color: #94C59A;
+      letter-spacing: 0;
+      margin-bottom: 0.8rem;
+      border-bottom: 1px solid #2a2d35;
+      display: inline-block;
+      padding-bottom: 0.2rem;
+    }
+
+    .live-formula {
+      font-family: inherit;
+      line-height: 1.7;
+      color: #cbd5e6;
+    }
+
+    .live-result {
+      margin-top: 1rem;
+      padding-top: 0.7rem;
+      border-top: 1px solid #2a2d35;
+      color: #E9A715;
+      font-weight: 500;
+    }
+
+    /* Persistent History Tape */
+    .history-section {
+      border-left-color: #94C59A;
+    }
+
+    .history-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.8rem;
+    }
+
+    .history-count {
+      color: #94C59A;
+      font-weight: 500;
+      font-size: 0.78rem;
+      margin-left: 0.35rem;
+    }
+
+    .history-subtitle {
+      margin-bottom: 0;
+    }
+
+    .history-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .confirm-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+    }
+
+    .confirm-label {
+      font-size: 0.75rem;
+      color: #E9A715;
+    }
+
+    .confirm-yes-btn {
+      padding: 0.42rem 0.9rem;
+      font-size: 0.75rem;
+    }
+
+    .history-list {
+      background: #0E0F12;
+      border: 1px solid #2a2d35;
+      max-height: 340px;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .history-empty {
+      padding: 1rem;
+      font-size: 0.76rem;
+      color: #6b768e;
+    }
+
+    .history-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.8rem;
+      padding: 0.7rem 0.9rem;
+      border-bottom: 1px solid #1e222d;
+      font-size: 0.78rem;
+      flex-wrap: wrap;
+    }
+
+    .history-item:last-child {
+      border-bottom: none;
+    }
+
+    .history-main {
+      display: flex;
+      align-items: baseline;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .history-time {
+      color: #6b768e;
+      font-size: 0.72rem;
+    }
+
+    .history-calc {
+      color: #94C59A;
+      font-weight: 600;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+    }
+
+    .history-inputs {
+      color: #cbd5e6;
+    }
+
+    .history-arrow {
+      color: #E9A715;
+    }
+
+    .history-result {
+      color: #eef2ff;
+      font-weight: 600;
+    }
+
+    .history-row-actions {
+      display: flex;
+      gap: 0.45rem;
+      align-items: center;
+    }
+
+    .history-row-actions .copy-btn,
+    .history-row-actions .reset-btn {
+      padding: 0.32rem 0.72rem;
+      font-size: 0.72rem;
+    }
+
+    /* Dark Terminal Modals (About & Install Guide) */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(8, 9, 12, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding:
+        calc(1rem + env(safe-area-inset-top, 0px))
+        calc(1rem + env(safe-area-inset-right, 0px))
+        calc(1rem + env(safe-area-inset-bottom, 0px))
+        calc(1rem + env(safe-area-inset-left, 0px));
+      z-index: 1000;
+    }
+
+    .modal-card {
+      background: #161822;
+      border: 1px solid #2a2d35;
+      border-left: 3px solid #E9A715;
+      max-width: 540px;
+      width: 100%;
+      max-height: 88dvh;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 1.4rem 1.5rem;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.1rem;
+    }
+
+    .modal-title {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #E9A715;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    .modal-close-x {
+      background: transparent;
+      border: none;
+      color: #a3adc2;
+      font-family: inherit;
+      font-size: 0.88rem;
+      white-space: nowrap;
+      flex-shrink: 0;
+      cursor: pointer;
+      padding: 0.25rem 0.45rem;
+      transition: color 0.1s ease;
+    }
+
+    .modal-close-x:hover {
+      color: #E9A715;
+    }
+
+    .about-identity {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.15rem;
+    }
+
+    .about-icon-badge {
+      width: 48px;
+      height: 48px;
+      background: #0E0F12;
+      border: 1px solid #2d313c;
+      color: #E9A715;
+      font-size: 1.55rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .about-app-name {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #eef2ff;
+      margin-bottom: 0.3rem;
+    }
+
+    .about-version-pill {
+      display: inline-block;
+      border: 1px solid #94C59A;
+      color: #94C59A;
+      background: rgba(148, 197, 154, 0.08);
+      font-size: 0.72rem;
+      padding: 0.12rem 0.55rem;
+    }
+
+    .about-box {
+      background: #0E0F12;
+      border: 1px solid #2a2d35;
+      padding: 0.9rem 1rem;
+      margin-bottom: 0.9rem;
+    }
+
+    .about-box-title {
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: #94C59A;
+      text-transform: uppercase;
+      margin-bottom: 0.65rem;
+      letter-spacing: 0.03em;
+    }
+
+    .credits-row {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+    }
+
+    .credits-row + .credits-row {
+      margin-top: 0.5rem;
+    }
+
+    .credit-pill {
+      font-size: 0.76rem;
+      padding: 0.18rem 0.6rem;
+      border: 1px solid #3a3f4c;
+    }
+
+    .credit-pill-gold {
+      background: rgba(233, 167, 21, 0.14);
+      border-color: rgba(233, 167, 21, 0.45);
+      color: #E9A715;
+      font-weight: 600;
+    }
+
+    .credit-pill-slate {
+      background: #161822;
+      border-color: #3a3f4c;
+      color: #e2e4e8;
+    }
+
+    .credit-dot {
+      color: #6b768e;
+      font-weight: 600;
+    }
+
+    .privacy-indicators {
+      display: flex;
+      gap: 0.9rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.5rem;
+    }
+
+    .privacy-badge {
+      color: #94C59A;
+      font-size: 0.74rem;
+      font-weight: 500;
+    }
+
+    .about-privacy-text {
+      font-size: 0.75rem;
+      color: #cbd5e6;
+      line-height: 1.55;
+    }
+
+    .install-steps {
+      list-style: decimal inside;
+      font-size: 0.76rem;
+      color: #cbd5e6;
+      line-height: 1.65;
+    }
+
+    .install-steps li + li {
+      margin-top: 0.25rem;
+    }
+
+    .install-note {
+      font-size: 0.74rem;
+      color: #E9A715;
+      line-height: 1.5;
+      border-left: 2px solid #E9A715;
+      padding-left: 0.65rem;
+      margin-bottom: 0.9rem;
+    }
+
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5rem;
+      margin-top: 0.3rem;
+    }
+
+    footer {
+      margin-top: 2rem;
+      font-size: 0.72rem;
+      color: #697791;
+      text-align: center;
+      border-top: 1px solid #2a2d35;
+      padding-top: 1rem;
+    }
+
+    @media (max-width: 760px) {
+      .header-row {
+        flex-direction: column;
+      }
+
+      .header h1 {
+        font-size: 1.35rem;
+      }
+
+      .header-actions {
+        justify-content: flex-start;
+      }
+
+      .calc-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+      }
+
+      .calc-section {
+        padding: 1rem;
+      }
+
+      .input-row input {
+        font-size: 16px;
+        min-height: 44px;
+        padding: 0.65rem 0.75rem;
+      }
+
+      .calc-btn,
+      .reset-btn,
+      .copy-btn,
+      .utility-btn,
+      .mode-btn {
+        min-height: 42px;
+      }
+
+      .swap-btn {
+        min-height: 36px;
+        font-size: 0.74rem;
+        padding: 0.35rem 0.75rem;
+      }
+    }
+
+    @media (pointer: coarse) {
+      .input-row input {
+        font-size: 16px;
+      }
+    }
+
+    @media (max-width: 440px) {
+      .button-group .calc-btn {
+        flex: 1.4 1 120px;
+      }
+
+      .button-group .reset-btn,
+      .button-group .copy-btn {
+        flex: 1 1 80px;
+      }
+
+      .credits-row {
+        gap: 0.35rem;
+      }
+
+      .credit-pill {
+        font-size: 0.7rem;
+        padding: 0.15rem 0.48rem;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div class="header-row">
+      <div>
+        <h1>Percentage Calculator Tool</h1>
+        <p>offline · local · mobile &amp; web</p>
+      </div>
+      <div class="header-actions">
+        <button class="utility-btn install-btn hidden" id="installAppBtn" type="button">install app</button>
+        <button class="utility-btn" id="clearAllBtn" type="button">clear all</button>
+        <button class="utility-btn" id="aboutBtn" type="button">about</button>
+      </div>
+    </div>
+  </div>
+
+  <nav class="quick-nav" aria-label="Jump to calculator">
+    <a class="quick-link" href="#card-change">change</a>
+    <a class="quick-link" href="#card-percent">% of total</a>
+    <a class="quick-link" href="#card-what">portion</a>
+    <a class="quick-link" href="#card-discount">discount</a>
+    <a class="quick-link" href="#card-base">original</a>
+    <a class="quick-link" href="#card-markup">markup &amp; margin</a>
+    <a class="quick-link" href="#card-tax">tax / vat</a>
+    <a class="quick-link" href="#historySection">history</a>
+  </nav>
+
+  <div class="calc-section" id="card-change">
+    <div class="calc-grid">
+      <div class="left-panel">
+        <div class="section-title">Percentage Change</div>
+        <div class="section-subtitle">Shows how much a value increased or decreased relative to the original.</div>
+
+        <div class="input-row">
+          <label for="changeOrig">Original value</label>
+          <input type="number" id="changeOrig" placeholder="e.g., 150" step="any" enterkeyhint="done" autocomplete="off">
+        </div>
+        <div class="swap-row">
+          <button class="swap-btn" id="swapChangeBtn" type="button" title="Swap original and new values">⇅ swap values</button>
+        </div>
+        <div class="input-row">
+          <label for="changeNew">New value</label>
+          <input type="number" id="changeNew" placeholder="e.g., 180" step="any" enterkeyhint="done" autocomplete="off">
+        </div>
+
+        <div class="button-group">
+          <button class="calc-btn" id="calcChangeBtn" type="button">calculate</button>
+          <button class="reset-btn" id="resetChangeBtn" type="button">clear</button>
+          <button class="copy-btn" id="copyChangeBtn" type="button">copy</button>
+        </div>
+
+        <div class="result" id="changeResult">—</div>
+      </div>
+
+      <div class="right-panel">
+        <div class="formula-title">live formula</div>
+        <div class="live-formula" id="changeLiveFormula">((new − original) / original) × 100</div>
+        <div class="live-result" id="changeLiveResult">→ —</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="calc-section" id="card-percent">
+    <div class="calc-grid">
+      <div class="left-panel">
+        <div class="section-title">Percentage of Total</div>
+        <div class="section-subtitle">Finds what percentage one number is of another.</div>
+
+        <div class="input-row">
+          <label for="isWhatX">X (part)</label>
+          <input type="number" id="isWhatX" placeholder="e.g., 50" step="any" enterkeyhint="done" autocomplete="off">
+        </div>
+        <div class="swap-row">
+          <button class="swap-btn" id="swapPercentBtn" type="button" title="Swap X and Y values">⇅ swap values</button>
+        </div>
+        <div class="input-row">
+          <label for="isWhatY">Y (total)</label>
+          <input type="number" id="isWhatY" placeholder="e.g., 200" step="any" enterkeyhint="done" autocomplete="off">
+        </div>
+
+        <div class="button-group">
+          <button class="calc-btn" id="calcPercentBtn" type="button">calculate</button>
+          <button class="reset-btn" id="resetPercentBtn" type="button">clear</button>
+          <button class="copy-btn" id="copyPercentBtn" type="button">copy</button>
+        </div>
+
+        <div class="result" id="percentResult">—</div>
+      </div>
+
+      <div class="right-panel">
+        <div class="formula-title">live formula</div>
+        <div class="live-formula" id="percentLiveFormula">(X / Y) × 100</div>
+        <div class="live-result" id="percentLiveResult">→ —</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="calc-section" id="card-what">
+    <div class="calc-grid">
+      <div class="left-panel">
+        <div class="section-title">Calculate Percentage</div>
+        <div class="section-subtitle">Calculates a percentage portion of a number.</div>
+
+        <div class="input-row">
+          <label for="whatX">X (percent)</label>
+          <input type="number" id="whatX" placeholder="e.g., 20" step="any" enterkeyhint="done" autocomplete="off">
+        </div>
+        <div class="swap-row">
+          <button class="swap-btn" id="swapWhatBtn" type="button" title="Swap X and Y values">⇅ swap values</button>
+        </div>
+        <div class="input-row">
+          <label for="whatY">Y (number)</label>
+          <input type="number" id="whatY" placeholder="e.g., 500" step="any" enterkeyhint="done" autocomplete="off">
+        </div>
+
+        <div class="button-group">
+          <button class="calc-btn" id="calcWhatBtn" type="button">calculate</button>
+          <button class="reset-btn" id="resetWhatBtn" type="button">clear</button>
+          <button class="copy-btn" id="copyWhatBtn" type="button">copy</button>
+        </div>
+
+        <div class="result" id="whatResult">—</div>
+      </div>
+
+      <div class="right-panel">
+        <div class="formula-title">live formula</div>
+        <div class="live-formula" id="whatLiveFormula">(X / 100) × Y</div>
+        <div class="live-result" id="whatLiveResult">→ —</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="calc-section" id="card-discount">
+    <div class="calc-grid">
+      <div class="left-panel">
+        <div class="section-title">Discount</div>
+        <div class="section-subtitle">Calculates final price and savings after a percentage discount.</div>
+
+        <div class="input-row">
+          <label for="discountPrice">Original price</label>
+          <input type="number" id="discountPrice" placeholder="e.g., 79.99" step="any" enterkeyhint="done" autocomplete="off">
+        </div>
+        <div class="swap-row">
+          <button class="swap-btn" id="swapDiscountBtn" type="button" title="Swap price and discount values">⇅ swap values</button>
+        </div>
+        <div class="input-row">
+          <label for="discountPercent">Discount (%)</label>
+          <input type="number" id="discountPercent" placeholder="e.g., 20" step="any" enterkeyhint="done" autocomplete="off">
+        </div>
+
+        <div class="button-group">
+          <button class="calc-btn" id="calcDiscountBtn" type="button">calculate</button>
+          <button class="reset-btn" id="resetDiscountBtn" type="button">clear</button>
+          <button class="copy-btn" id="copyDiscountBtn" type="button">copy</button>
+        </div>
+
+        <div class="result" id="discountResult">—</div>
+      </div>
+
+      <div class="right-panel">
+        <div class="formula-title">live formula</div>
+        <div class="live-formula" id="discountLiveFormula">final = price × (1 − discount/100)<br>saved = price × discount/100</div>
+        <div class="live-result" id="discountLiveResult">→ —</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="calc-section" id="card-base">
+    <div class="calc-grid">
+      <div class="left-panel">
+        <div class="section-title">Find Original Value</div>
+        <div class="section-subtitle">Finds the full number when you know a value and its percentage.</div>
+
+        <div class="input-row">
+          <label for="baseX">X (value)</label>
+          <input type="number" id="baseX" placeholder="e.g., 50" step="any" enterkeyhint="done" autocomplete="off">
+        </div>
+        <div class="swap-row">
+          <button class="swap-btn" id="swapBaseBtn" type="button" title="Swap X and Y values">⇅ swap values</button>
+        </div>
+        <div class="input-row">
+          <label for="baseY">Y (percent)</label>
+          <input type="number" id="baseY" placeholder="e.g., 25" step="any" enterkeyhint="done" autocomplete="off">
+        </div>
+
+        <div class="button-group">
+          <button class="calc-btn" id="calcBaseBtn" type="button">calculate</button>
+          <button class="reset-btn" id="resetBaseBtn" type="button">clear</button>
+          <button class="copy-btn" id="copyBaseBtn" type="button">copy</button>
+        </div>
+
+        <div class="result" id="baseResult">—</div>
+      </div>
+
+      <div class="right-panel">
+        <div class="formula-title">live formula</div>
+        <div class="live-formula" id="baseLiveFormula">X / (Y / 100)</div>
+        <div class="live-result" id="baseLiveResult">→ —</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="calc-section" id="card-markup">
+    <div class="calc-grid">
+      <div class="left-panel">
+        <div class="section-title">Markup &amp; Profit Margin</div>
+        <div class="section-subtitle">Calculates net profit, markup % on cost, and gross margin % on selling price.</div>
+
+        <div class="input-row">
+          <label for="markupCost">Cost</label>
+          <input type="number" id="markupCost" placeholder="e.g., 80" step="any" enterkeyhint="done" autocomplete="off">
+        </div>
+        <div class="swap-row">
+          <button class="swap-btn" id="swapMarkupBtn" type="button" title="Swap cost and selling price">⇅ swap values</button>
+        </div>
+        <div class="input-row">
+          <label for="markupPrice">Selling price</label>
+          <input type="number" id="markupPrice" placeholder="e.g., 100" step="any" enterkeyhint="done" autocomplete="off">
+        </div>
+
+        <div class="button-group">
+          <button class="calc-btn" id="calcMarkupBtn" type="button">calculate</button>
+          <button class="reset-btn" id="resetMarkupBtn" type="button">clear</button>
+          <button class="copy-btn" id="copyMarkupBtn" type="button">copy</button>
+        </div>
+
+        <div class="result" id="markupResult">—</div>
+      </div>
+
+      <div class="right-panel">
+        <div class="formula-title">live formula</div>
+        <div class="live-formula" id="markupLiveFormula">profit = price − cost<br>markup = (profit / cost) × 100<br>margin = (profit / price) × 100</div>
+        <div class="live-result" id="markupLiveResult">→ —</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="calc-section" id="card-tax">
+    <div class="calc-grid">
+      <div class="left-panel">
+        <div class="section-title-row">
+          <div class="section-title">Reverse Tax / VAT</div>
+          <div class="mode-toggle" role="group" aria-label="Tax calculation mode">
+            <button class="mode-btn active" id="taxModeAddBtn" data-mode="add" type="button">add tax</button>
+            <button class="mode-btn" id="taxModeExtractBtn" data-mode="extract" type="button">extract tax</button>
+          </div>
+        </div>
+        <div class="section-subtitle" id="taxSubtitle">Adds a percentage tax/VAT to a net amount or extracts tax from a tax-inclusive total.</div>
+
+        <div class="input-row">
+          <label for="taxAmount" id="taxAmountLabel">Net amount (before tax)</label>
+          <input type="number" id="taxAmount" placeholder="e.g., 100" step="any" enterkeyhint="done" autocomplete="off">
+        </div>
+        <div class="swap-row">
+          <button class="swap-btn" id="swapTaxBtn" type="button" title="Swap amount and tax rate">⇅ swap values</button>
+        </div>
+        <div class="input-row">
+          <label for="taxRate">Tax / VAT rate (%)</label>
+          <input type="number" id="taxRate" placeholder="e.g., 15" step="any" enterkeyhint="done" autocomplete="off">
+        </div>
+
+        <div class="button-group">
+          <button class="calc-btn" id="calcTaxBtn" type="button">calculate</button>
+          <button class="reset-btn" id="resetTaxBtn" type="button">clear</button>
+          <button class="copy-btn" id="copyTaxBtn" type="button">copy</button>
+        </div>
+
+        <div class="result" id="taxResult">—</div>
+      </div>
+
+      <div class="right-panel">
+        <div class="formula-title">live formula</div>
+        <div class="live-formula" id="taxLiveFormula">tax = net × (rate / 100)<br>total = net + tax</div>
+        <div class="live-result" id="taxLiveResult">→ —</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="calc-section history-section" id="historySection">
+    <div class="history-header">
+      <div>
+        <div class="section-title">History <span class="history-count" id="historyCount">(0 / 500)</span></div>
+        <div class="section-subtitle history-subtitle">Saved locally on this device · newest first · tap ↺ to restore inputs into calculator.</div>
+      </div>
+      <div class="history-actions">
+        <button class="reset-btn" id="clearHistoryBtn" type="button">clear history</button>
+        <div class="confirm-group hidden" id="clearHistoryConfirm">
+          <span class="confirm-label">clear all saved history?</span>
+          <button class="calc-btn confirm-yes-btn" id="confirmClearHistoryBtn" type="button">yes, clear</button>
+          <button class="reset-btn" id="cancelClearHistoryBtn" type="button">cancel</button>
+        </div>
+      </div>
+    </div>
+    <div class="history-list" id="historyList">
+      <div class="history-empty">No calculations recorded yet. Press calculate, Enter, or copy on any card to save to history.</div>
+    </div>
+  </div>
+
+  <footer>Mohamed Sayed · Ahmed Emara · DeepSeek · ChatGPT · Antigravity · 2026 · <span id="appVersion">Mobile &amp; Web v2.1.0</span></footer>
+</div>
+
+<div class="modal-backdrop hidden" id="aboutModal" role="dialog" aria-modal="true" aria-labelledby="aboutModalTitle">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-title" id="aboutModalTitle">ABOUT // PERCENTAGE CALCULATOR TOOL</div>
+      <button class="modal-close-x" id="closeAboutXBtn" type="button" aria-label="Close About dialog">[ × ]</button>
+    </div>
+
+    <div class="about-identity">
+      <div class="about-icon-badge" aria-hidden="true">%</div>
+      <div>
+        <div class="about-app-name" id="aboutAppName">Percentage Calculator Tool</div>
+        <div class="about-version-pill" id="aboutVersionPill">Mobile &amp; Web v2.1.0 · Offline HTML / PWA</div>
+      </div>
+    </div>
+
+    <div class="about-box">
+      <div class="about-box-title">CREDITS</div>
+      <div class="credits-row" id="aboutCreatorsRow">
+        <span class="credit-pill credit-pill-gold">Mohamed Sayed</span>
+        <span class="credit-dot">·</span>
+        <span class="credit-pill credit-pill-gold">Ahmed Emara</span>
+      </div>
+      <div class="credits-row" id="aboutAiRow">
+        <span class="credit-pill credit-pill-slate">DeepSeek</span>
+        <span class="credit-dot">·</span>
+        <span class="credit-pill credit-pill-slate">ChatGPT</span>
+        <span class="credit-dot">·</span>
+        <span class="credit-pill credit-pill-slate">Antigravity</span>
+      </div>
+    </div>
+
+    <div class="about-box">
+      <div class="about-box-title">PRIVACY &amp; RUNTIME</div>
+      <div class="privacy-indicators">
+        <span class="privacy-badge">● 100% Offline</span>
+        <span class="privacy-badge">● Zero Telemetry</span>
+        <span class="privacy-badge">● On-Device Engine</span>
+      </div>
+      <p class="about-privacy-text" id="aboutPrivacyText">Fully offline. No tracking, no network calls. Calculation history is saved locally on this device only and can be cleared anytime.</p>
+    </div>
+
+    <div class="modal-footer">
+      <button class="calc-btn" id="closeAboutBtn" type="button">close [esc]</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop hidden" id="installModal" role="dialog" aria-modal="true" aria-labelledby="installModalTitle">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-title" id="installModalTitle">INSTALL AS PHONE APP // PWA</div>
+      <button class="modal-close-x" id="closeInstallXBtn" type="button" aria-label="Close Install dialog">[ × ]</button>
+    </div>
+
+    <p class="install-note hidden" id="installFileNote">You are opening this file directly from storage (file://). To add it to your Home Screen as an offline app with an icon, open the hosted HTTPS link in iPhone Safari or Android Chrome.</p>
+
+    <div class="about-box" id="installIosBox">
+      <div class="about-box-title">IPHONE / IPAD (SAFARI)</div>
+      <ol class="install-steps">
+        <li>Open this page in <strong>Safari</strong>.</li>
+        <li>Tap the <strong>Share (↑)</strong> button on Safari's toolbar.</li>
+        <li>Scroll down and tap <strong>Add to Home Screen</strong> → <strong>Add</strong>.</li>
+        <li>Launch from your Home Screen — works 100% offline.</li>
+      </ol>
+    </div>
+
+    <div class="about-box" id="installAndroidBox">
+      <div class="about-box-title">ANDROID (CHROME / EDGE)</div>
+      <ol class="install-steps">
+        <li>Open this page in <strong>Chrome</strong> or <strong>Edge</strong>.</li>
+        <li>Tap the <strong>⋮</strong> menu in the top-right corner.</li>
+        <li>Tap <strong>Install app</strong> or <strong>Add to Home screen</strong>.</li>
+        <li>Installs to your app drawer and works 100% offline.</li>
+      </ol>
+    </div>
+
+    <div class="modal-footer">
+      <button class="calc-btn hidden" id="triggerPromptBtn" type="button">install now</button>
+      <button class="calc-btn" id="closeInstallBtn" type="button">close [esc]</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const COPY_FEEDBACK_MS = 1200;
+  const HISTORY_LIMIT = 500;
+  const HISTORY_STORAGE_KEY = "pct_tool_history_v2";
+  const ALLOWED_CALCULATORS = new Set([
+    "change",
+    "percent",
+    "what",
+    "discount",
+    "base",
+    "markup",
+    "tax"
+  ]);
+
+  let taxMode = "add";
+  let memoryHistory = [];
+  let deferredInstallPrompt = null;
+
+  const seq = {
+    change: 0,
+    percent: 0,
+    what: 0,
+    discount: 0,
+    base: 0,
+    markup: 0,
+    tax: 0
+  };
+
+  const lastValidCalc = {
+    change: null,
+    percent: null,
+    what: null,
+    discount: null,
+    base: null,
+    markup: null,
+    tax: null
+  };
+
+  // --- Pure calculation engine (100% byte-for-byte parity with percent-core) ---
+
+  function formatDecimal(value) {
+    if (Number.isNaN(value)) return "?";
+    const rounded = Math.round(value * 100) / 100;
+    if (!Number.isFinite(rounded)) {
+      return rounded < 0 ? "-Infinity" : "Infinity";
+    }
+    const clean = rounded === 0 ? 0 : rounded;
+    if (Math.abs(clean) >= 1e21) {
+      return clean.toExponential();
+    }
+    return clean.toFixed(2);
+  }
+
+  function calcChange(originalValue, newValue) {
+    if (originalValue === 0) {
+      return { ok: "false", error: "Original value cannot be zero" };
+    }
+    const value = ((newValue - originalValue) / originalValue) * 100;
+    const absText = formatDecimal(Math.abs(value));
+    const suffix =
+      value > 0 ? "increase" : value < 0 ? "decrease" : "no change";
+    const label =
+      value !== 0 && !Number.isNaN(value)
+        ? `${absText}% ${suffix}`
+        : "0.00% no change";
+    return {
+      ok: "true",
+      value,
+      label,
+      liveResult: `${absText}% ${suffix}`
+    };
+  }
+
+  function calcPercentOfTotal(part, total) {
+    if (total === 0) {
+      return { ok: "false", error: "Total cannot be zero" };
+    }
+    const value = (part / total) * 100;
+    const label = `${formatDecimal(value)}%`;
+    return {
+      ok: "true",
+      value,
+      label,
+      liveResult: label
+    };
+  }
+
+  function calcPortion(percent, number) {
+    const value = (percent / 100) * number;
+    const label = formatDecimal(value);
+    return {
+      ok: "true",
+      value,
+      label,
+      liveResult: label
+    };
+  }
+
+  function calcDiscount(price, discountPercent) {
+    const saved = price * (discountPercent / 100);
+    const finalPrice = price - saved;
+    const finalText = formatDecimal(finalPrice);
+    const savedText = formatDecimal(saved);
+    return {
+      ok: true,
+      finalPrice,
+      saved,
+      finalText,
+      savedText,
+      label: `Final: ${finalText}<br>Saved: ${savedText}`,
+      copyText: `Final: ${finalText}\nSaved: ${savedText}`
+    };
+  }
+
+  function calcOriginal(value, percent) {
+    if (percent === 0) {
+      return { ok: "false", error: "Percent cannot be zero" };
+    }
+    const originalValue = value / (percent / 100);
+    const label = formatDecimal(originalValue);
+    return {
+      ok: "true",
+      value: originalValue,
+      label,
+      liveResult: label
+    };
+  }
+
+  function calcMarkupMargin(cost, sellingPrice) {
+    if (cost === 0) {
+      return { ok: "false", error: "Cost cannot be zero" };
+    }
+    if (sellingPrice === 0) {
+      return { ok: "false", error: "Selling price cannot be zero" };
+    }
+    const profit = sellingPrice - cost;
+    const markup = (profit / cost) * 100;
+    const margin = (profit / sellingPrice) * 100;
+    const profitText = formatDecimal(profit);
+    const markupText = `${formatDecimal(markup)}%`;
+    const marginText = `${formatDecimal(margin)}%`;
+    return {
+      ok: "true",
+      profit,
+      markup,
+      margin,
+      profitText,
+      markupText,
+      marginText,
+      label: `Profit: ${profitText}<br>Markup: ${markupText} · Margin: ${marginText}`,
+      liveResult: `Profit: ${profitText} | Markup: ${markupText} | Margin: ${marginText}`,
+      copyText: `Profit: ${profitText}\nMarkup: ${markupText}\nMargin: ${marginText}`
+    };
+  }
+
+  function calcTax(amount, ratePercent, mode) {
+    if (mode === "extract") {
+      const divisor = 100 + ratePercent;
+      if (divisor === 0) {
+        return { ok: "false", error: "Tax rate cannot be -100%" };
+      }
+      const total = amount;
+      const net = (amount * 100) / divisor;
+      const tax = amount - net;
+      const netText = formatDecimal(net);
+      const taxText = formatDecimal(tax);
+      const totalText = formatDecimal(total);
+      return {
+        ok: "true",
+        net,
+        tax,
+        total,
+        netText,
+        taxText,
+        totalText,
+        label: `Net: ${netText}<br>Tax: ${taxText} (Total: ${totalText})`,
+        liveResult: `Net: ${netText} | Tax: ${taxText}`,
+        copyText: `Net: ${netText}\nTax: ${taxText}\nTotal: ${totalText}`
+      };
+    }
+
+    const net = amount;
+    const tax = amount * (ratePercent / 100);
+    const total = amount + tax;
+    const netText = formatDecimal(net);
+    const taxText = formatDecimal(tax);
+    const totalText = formatDecimal(total);
+    return {
+      ok: "true",
+      net,
+      tax,
+      total,
+      netText,
+      taxText,
+      totalText,
+      label: `Total: ${totalText}<br>Tax: ${taxText} (Net: ${netText})`,
+      liveResult: `Total: ${totalText} | Tax: ${taxText}`,
+      copyText: `Total: ${totalText}\nTax: ${taxText}\nNet: ${netText}`
+    };
+  }
+
+  // --- Persistent on-device history (localStorage with in-memory fallback) ---
+
+  function readHistoryFromStorage() {
+    try {
+      const raw = window.localStorage.getItem(HISTORY_STORAGE_KEY);
+      if (!raw) return memoryHistory.slice(0, HISTORY_LIMIT);
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      const sanitized = parsed
+        .filter(
+          (item) =>
+            item &&
+            typeof item === "object" &&
+            ALLOWED_CALCULATORS.has(item.calculator) &&
+            typeof item.calculatorLabel === "string" &&
+            typeof item.inputA === "string" &&
+            typeof item.inputB === "string" &&
+            typeof item.inputsText === "string" &&
+            typeof item.resultText === "string"
+        )
+        .slice(0, HISTORY_LIMIT);
+      memoryHistory = sanitized;
+      return sanitized;
+    } catch {
+      return memoryHistory.slice(0, HISTORY_LIMIT);
+    }
+  }
+
+  function writeHistoryToStorage(entries) {
+    const trimmed = entries.slice(0, HISTORY_LIMIT);
+    memoryHistory = trimmed;
+    try {
+      window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(trimmed));
+    } catch {
+      // Ignore quota or private-mode restrictions; in-memory history still works.
+    }
+    return trimmed;
+  }
+
+  function addHistoryEntry(entry) {
+    if (!entry || !ALLOWED_CALCULATORS.has(entry.calculator)) {
+      return readHistoryFromStorage();
+    }
+    const entries = readHistoryFromStorage();
+    const now = Date.now();
+    const first = entries[0];
+
+    if (
+      first &&
+      first.calculator === entry.calculator &&
+      first.inputA === entry.inputA &&
+      first.inputB === entry.inputB &&
+      (first.mode ?? null) === (entry.mode ?? null) &&
+      first.resultText === entry.resultText
+    ) {
+      entries[0] = { ...first, timestampMs: now };
+      return writeHistoryToStorage(entries);
+    }
+
+    const nextId =
+      entries.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1;
+    const newItem = {
+      id: nextId,
+      timestampMs: now,
+      calculator: entry.calculator,
+      calculatorLabel: entry.calculatorLabel,
+      inputA: entry.inputA,
+      inputB: entry.inputB,
+      mode: entry.mode ?? null,
+      inputsText: entry.inputsText,
+      resultText: entry.resultText,
+      copyText: entry.copyText || entry.resultText
+    };
+    entries.unshift(newItem);
+    return writeHistoryToStorage(entries);
+  }
+
+  function clearHistoryStorage() {
+    memoryHistory = [];
+    try {
+      window.localStorage.removeItem(HISTORY_STORAGE_KEY);
+    } catch {
+      // Ignore storage errors cleanly.
+    }
+    return [];
+  }
+
+  // --- DOM helpers & clipboard ---
+
+  function getNumber(id) {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    const val = el.value.trim();
+    if (val === "") return null;
+    const num = parseFloat(val);
+    return Number.isNaN(num) ? null : num;
+  }
+
+  function getRawInput(id) {
+    const el = document.getElementById(id);
+    return el ? el.value.trim() : "";
+  }
+
+  function setLines(el, lines) {
+    if (!el) return;
+    el.replaceChildren();
+    lines.forEach((line, idx) => {
+      if (idx > 0) el.appendChild(document.createElement("br"));
+      el.appendChild(document.createTextNode(line));
+    });
+  }
+
+  function setFormulaError(el, formula, errorNote) {
+    if (!el) return;
+    const errSpan = document.createElement("span");
+    errSpan.className = "error-text";
+    errSpan.textContent = errorNote;
+    el.replaceChildren(document.createTextNode(`${formula} `), errSpan);
+  }
+
+  function setResult(resultId, content, isError = false) {
+    const el = document.getElementById(resultId);
+    if (!el) return;
+
+    const prefix = document.createElement("span");
+    prefix.className = "result-prefix";
+    prefix.textContent = "=";
+
+    if (isError) {
+      const errSpan = document.createElement("span");
+      errSpan.className = "error-text";
+      errSpan.textContent = content;
+      el.replaceChildren(prefix, errSpan);
+      return;
+    }
+
+    const parts = String(content).split("<br>");
+    const nodes = [prefix];
+    parts.forEach((part, idx) => {
+      if (idx > 0) nodes.push(document.createElement("br"));
+      nodes.push(document.createTextNode(part));
+    });
+    el.replaceChildren(...nodes);
+  }
+
+  function showCopyFeedback(button) {
+    if (!button) return;
+    const originalText = button.dataset.label || button.textContent;
+    button.dataset.label = originalText;
+    button.textContent = "copied";
+    button.classList.add("copied");
+    window.clearTimeout(Number(button.dataset.copyTimer || 0));
+    const timer = window.setTimeout(() => {
+      button.textContent = originalText;
+      button.classList.remove("copied");
+    }, COPY_FEEDBACK_MS);
+    button.dataset.copyTimer = String(timer);
+  }
+
+  function legacyCopyText(text) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.top = "-9999px";
+    ta.style.left = "-9999px";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.focus({ preventScroll: true });
+    ta.select();
+    let ok = false;
+    try {
+      ok = document.execCommand("copy");
+    } catch {
+      ok = false;
+    }
+    document.body.removeChild(ta);
+    return ok;
+  }
+
+  async function copyText(text, button) {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        showCopyFeedback(button);
+        return;
+      }
+    } catch {
+      // Fall through to execCommand fallback for file:// or iOS webviews.
+    }
+    if (legacyCopyText(text)) {
+      showCopyFeedback(button);
+    }
+  }
+
+  function swapFields(aId, bId, updateFn) {
+    const elA = document.getElementById(aId);
+    const elB = document.getElementById(bId);
+    if (!elA || !elB) return;
+    const tmp = elA.value;
+    elA.value = elB.value;
+    elB.value = tmp;
+    updateFn();
+  }
+
+  function attachEnterKey(ids, computeAndRecordFn) {
+    ids.forEach((id) => {
+      const el = document.getElementById(id);
+      el.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+          computeAndRecordFn();
+        }
+      });
+    });
+  }
+
+  // --- Calculator updates ---
+
+  function updateChangeLive() {
+    ++seq.change;
+    const orig = getNumber("changeOrig");
+    const newVal = getNumber("changeNew");
+    const formulaDiv = document.getElementById("changeLiveFormula");
+    const resultSpan = document.getElementById("changeLiveResult");
+
+    if (orig === null || newVal === null) {
+      lastValidCalc.change = null;
+      formulaDiv.textContent = "((new − original) / original) × 100";
+      resultSpan.textContent = "→ —";
+      setResult("changeResult", "—");
+      return;
+    }
+
+    const result = calcChange(orig, newVal);
+    if (result.ok === "false") {
+      lastValidCalc.change = null;
+      setFormulaError(
+        formulaDiv,
+        "((new − original) / original) × 100",
+        "(original cannot be zero)"
+      );
+      resultSpan.textContent = "→ invalid";
+      setResult("changeResult", result.error, true);
+      return;
+    }
+
+    formulaDiv.textContent = `((${newVal} − ${orig}) / ${orig}) × 100`;
+    resultSpan.textContent = `→ ${result.liveResult}`;
+    setResult("changeResult", result.label);
+
+    lastValidCalc.change = {
+      calculator: "change",
+      calculatorLabel: "Percentage Change",
+      inputA: getRawInput("changeOrig"),
+      inputB: getRawInput("changeNew"),
+      mode: null,
+      inputsText: `${orig} → ${newVal}`,
+      resultText: result.label,
+      copyText: result.label
+    };
+  }
+
+  function updatePercentLive() {
+    ++seq.percent;
+    const x = getNumber("isWhatX");
+    const y = getNumber("isWhatY");
+    const formulaDiv = document.getElementById("percentLiveFormula");
+    const resultSpan = document.getElementById("percentLiveResult");
+
+    if (x === null || y === null) {
+      lastValidCalc.percent = null;
+      formulaDiv.textContent = "(X / Y) × 100";
+      resultSpan.textContent = "→ —";
+      setResult("percentResult", "—");
+      return;
+    }
+
+    const result = calcPercentOfTotal(x, y);
+    if (result.ok === "false") {
+      lastValidCalc.percent = null;
+      setFormulaError(formulaDiv, "(X / Y) × 100", "(Y cannot be zero)");
+      resultSpan.textContent = "→ invalid";
+      setResult("percentResult", result.error, true);
+      return;
+    }
+
+    formulaDiv.textContent = `(${x} / ${y}) × 100`;
+    resultSpan.textContent = `→ ${result.label}`;
+    setResult("percentResult", result.label);
+
+    lastValidCalc.percent = {
+      calculator: "percent",
+      calculatorLabel: "Percentage of Total",
+      inputA: getRawInput("isWhatX"),
+      inputB: getRawInput("isWhatY"),
+      mode: null,
+      inputsText: `${x} of ${y}`,
+      resultText: result.label,
+      copyText: result.label
+    };
+  }
+
+  function updateWhatLive() {
+    ++seq.what;
+    const x = getNumber("whatX");
+    const y = getNumber("whatY");
+    const formulaDiv = document.getElementById("whatLiveFormula");
+    const resultSpan = document.getElementById("whatLiveResult");
+
+    if (x === null || y === null) {
+      lastValidCalc.what = null;
+      formulaDiv.textContent = "(X / 100) × Y";
+      resultSpan.textContent = "→ —";
+      setResult("whatResult", "—");
+      return;
+    }
+
+    const result = calcPortion(x, y);
+    formulaDiv.textContent = `(${x} / 100) × ${y}`;
+    resultSpan.textContent = `→ ${result.label}`;
+    setResult("whatResult", result.label);
+
+    lastValidCalc.what = {
+      calculator: "what",
+      calculatorLabel: "Calculate Percentage",
+      inputA: getRawInput("whatX"),
+      inputB: getRawInput("whatY"),
+      mode: null,
+      inputsText: `${x}% of ${y}`,
+      resultText: result.label,
+      copyText: result.label
+    };
+  }
+
+  function updateDiscountLive() {
+    ++seq.discount;
+    const price = getNumber("discountPrice");
+    const disc = getNumber("discountPercent");
+    const formulaDiv = document.getElementById("discountLiveFormula");
+    const resultSpan = document.getElementById("discountLiveResult");
+
+    if (price === null || disc === null) {
+      lastValidCalc.discount = null;
+      setLines(formulaDiv, [
+        "final = price × (1 − discount/100)",
+        "saved = price × discount/100"
+      ]);
+      resultSpan.textContent = "→ —";
+      setResult("discountResult", "—");
+      return;
+    }
+
+    const result = calcDiscount(price, disc);
+    setLines(formulaDiv, [
+      `final = ${price} × (1 − ${disc}/100) = ${result.finalText}`,
+      `saved = ${price} × ${disc}/100 = ${result.savedText}`
+    ]);
+    resultSpan.textContent = `→ final: ${result.finalText} | saved: ${result.savedText}`;
+    setResult("discountResult", result.label);
+
+    lastValidCalc.discount = {
+      calculator: "discount",
+      calculatorLabel: "Discount",
+      inputA: getRawInput("discountPrice"),
+      inputB: getRawInput("discountPercent"),
+      mode: null,
+      inputsText: `${price} (−${disc}%)`,
+      resultText: `Final: ${result.finalText} · Saved: ${result.savedText}`,
+      copyText: result.copyText
+    };
+  }
+
+  function updateBaseLive() {
+    ++seq.base;
+    const x = getNumber("baseX");
+    const y = getNumber("baseY");
+    const formulaDiv = document.getElementById("baseLiveFormula");
+    const resultSpan = document.getElementById("baseLiveResult");
+
+    if (x === null || y === null) {
+      lastValidCalc.base = null;
+      formulaDiv.textContent = "X / (Y / 100)";
+      resultSpan.textContent = "→ —";
+      setResult("baseResult", "—");
+      return;
+    }
+
+    const result = calcOriginal(x, y);
+    if (result.ok === "false") {
+      lastValidCalc.base = null;
+      setFormulaError(formulaDiv, "X / (Y / 100)", "(Y cannot be zero)");
+      resultSpan.textContent = "→ invalid";
+      setResult("baseResult", result.error, true);
+      return;
+    }
+
+    formulaDiv.textContent = `${x} / (${y} / 100)`;
+    resultSpan.textContent = `→ ${result.label}`;
+    setResult("baseResult", result.label);
+
+    lastValidCalc.base = {
+      calculator: "base",
+      calculatorLabel: "Find Original Value",
+      inputA: getRawInput("baseX"),
+      inputB: getRawInput("baseY"),
+      mode: null,
+      inputsText: `${x} is ${y}%`,
+      resultText: result.label,
+      copyText: result.label
+    };
+  }
+
+  function updateMarkupLive() {
+    ++seq.markup;
+    const cost = getNumber("markupCost");
+    const price = getNumber("markupPrice");
+    const formulaDiv = document.getElementById("markupLiveFormula");
+    const resultSpan = document.getElementById("markupLiveResult");
+
+    if (cost === null || price === null) {
+      lastValidCalc.markup = null;
+      setLines(formulaDiv, [
+        "profit = price − cost",
+        "markup = (profit / cost) × 100",
+        "margin = (profit / price) × 100"
+      ]);
+      resultSpan.textContent = "→ —";
+      setResult("markupResult", "—");
+      return;
+    }
+
+    const result = calcMarkupMargin(cost, price);
+    if (result.ok === "false") {
+      lastValidCalc.markup = null;
+      setFormulaError(
+        formulaDiv,
+        "markup = (price − cost) / cost × 100",
+        `(${result.error.toLowerCase()})`
+      );
+      resultSpan.textContent = "→ invalid";
+      setResult("markupResult", result.error, true);
+      return;
+    }
+
+    setLines(formulaDiv, [
+      `profit = ${price} − ${cost} = ${result.profitText}`,
+      `markup = (${result.profitText} / ${cost}) × 100 = ${result.markupText}`,
+      `margin = (${result.profitText} / ${price}) × 100 = ${result.marginText}`
+    ]);
+    resultSpan.textContent = `→ ${result.liveResult}`;
+    setResult("markupResult", result.label);
+
+    lastValidCalc.markup = {
+      calculator: "markup",
+      calculatorLabel: "Markup & Margin",
+      inputA: getRawInput("markupCost"),
+      inputB: getRawInput("markupPrice"),
+      mode: null,
+      inputsText: `Cost ${cost} → Price ${price}`,
+      resultText: `Profit: ${result.profitText} · Markup: ${result.markupText} · Margin: ${result.marginText}`,
+      copyText: result.copyText
+    };
+  }
+
+  function setTaxMode(newMode, triggerUpdate = true) {
+    taxMode = newMode === "extract" ? "extract" : "add";
+    const addBtn = document.getElementById("taxModeAddBtn");
+    const extractBtn = document.getElementById("taxModeExtractBtn");
+    const amountLabel = document.getElementById("taxAmountLabel");
+    const amountInput = document.getElementById("taxAmount");
+
+    if (taxMode === "extract") {
+      addBtn.classList.remove("active");
+      extractBtn.classList.add("active");
+      amountLabel.textContent = "Total amount (tax-inclusive)";
+      amountInput.placeholder = "e.g., 115";
+    } else {
+      extractBtn.classList.remove("active");
+      addBtn.classList.add("active");
+      amountLabel.textContent = "Net amount (before tax)";
+      amountInput.placeholder = "e.g., 100";
+    }
+
+    if (triggerUpdate) {
+      updateTaxLive();
+    }
+  }
+
+  function updateTaxLive() {
+    ++seq.tax;
+    const amount = getNumber("taxAmount");
+    const rate = getNumber("taxRate");
+    const mode = taxMode;
+    const formulaDiv = document.getElementById("taxLiveFormula");
+    const resultSpan = document.getElementById("taxLiveResult");
+
+    if (amount === null || rate === null) {
+      lastValidCalc.tax = null;
+      if (mode === "extract") {
+        setLines(formulaDiv, [
+          "net = total / (1 + rate/100)",
+          "tax = total − net"
+        ]);
+      } else {
+        setLines(formulaDiv, [
+          "tax = net × (rate / 100)",
+          "total = net + tax"
+        ]);
+      }
+      resultSpan.textContent = "→ —";
+      setResult("taxResult", "—");
+      return;
+    }
+
+    const result = calcTax(amount, rate, mode);
+    if (result.ok === "false") {
+      lastValidCalc.tax = null;
+      setFormulaError(
+        formulaDiv,
+        "net = total / (1 + rate/100)",
+        `(${result.error.toLowerCase()})`
+      );
+      resultSpan.textContent = "→ invalid";
+      setResult("taxResult", result.error, true);
+      return;
+    }
+
+    if (mode === "extract") {
+      setLines(formulaDiv, [
+        `net = ${amount} / (1 + ${rate}/100) = ${result.netText}`,
+        `tax = ${amount} − ${result.netText} = ${result.taxText}`
+      ]);
+    } else {
+      setLines(formulaDiv, [
+        `tax = ${amount} × (${rate} / 100) = ${result.taxText}`,
+        `total = ${amount} + ${result.taxText} = ${result.totalText}`
+      ]);
+    }
+    resultSpan.textContent = `→ ${result.liveResult}`;
+    setResult("taxResult", result.label);
+
+    lastValidCalc.tax = {
+      calculator: "tax",
+      calculatorLabel: mode === "extract" ? "Tax / VAT (Extract)" : "Tax / VAT (Add)",
+      inputA: getRawInput("taxAmount"),
+      inputB: getRawInput("taxRate"),
+      mode,
+      inputsText:
+        mode === "extract"
+          ? `${amount} incl. ${rate}% tax`
+          : `${amount} + ${rate}% tax`,
+      resultText:
+        mode === "extract"
+          ? `Net: ${result.netText} · Tax: ${result.taxText}`
+          : `Total: ${result.totalText} · Tax: ${result.taxText}`,
+      copyText: result.copyText
+    };
+  }
+
+  // --- History UI ---
+
+  function formatHistoryTime(timestampMs) {
+    if (!timestampMs) return "--:--:--";
+    const date = new Date(timestampMs);
+    if (Number.isNaN(date.getTime())) return "--:--:--";
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  }
+
+  function restoreHistoryEntry(entry) {
+    const map = {
+      change: { card: "card-change", a: "changeOrig", b: "changeNew", fn: updateChangeLive },
+      percent: { card: "card-percent", a: "isWhatX", b: "isWhatY", fn: updatePercentLive },
+      what: { card: "card-what", a: "whatX", b: "whatY", fn: updateWhatLive },
+      discount: {
+        card: "card-discount",
+        a: "discountPrice",
+        b: "discountPercent",
+        fn: updateDiscountLive
+      },
+      base: { card: "card-base", a: "baseX", b: "baseY", fn: updateBaseLive },
+      markup: { card: "card-markup", a: "markupCost", b: "markupPrice", fn: updateMarkupLive },
+      tax: { card: "card-tax", a: "taxAmount", b: "taxRate", fn: updateTaxLive }
+    };
+
+    const target = map[entry.calculator];
+    if (!target) return;
+
+    if (entry.calculator === "tax" && entry.mode) {
+      setTaxMode(entry.mode, false);
+    }
+
+    const elA = document.getElementById(target.a);
+    const elB = document.getElementById(target.b);
+    if (!elA || !elB) return;
+
+    elA.value = entry.inputA;
+    elB.value = entry.inputB;
+    target.fn();
+
+    document.getElementById(target.card)?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest"
+    });
+    elA.focus({ preventScroll: true });
+  }
+
+  function renderHistory(entries) {
+    const countEl = document.getElementById("historyCount");
+    const listEl = document.getElementById("historyList");
+    if (!countEl || !listEl) return;
+
+    const list = Array.isArray(entries) ? entries : [];
+    countEl.textContent = `(${list.length} / ${HISTORY_LIMIT})`;
+    listEl.replaceChildren();
+
+    if (list.length === 0) {
+      const emptyDiv = document.createElement("div");
+      emptyDiv.className = "history-empty";
+      emptyDiv.textContent =
+        "No calculations recorded yet. Press calculate, Enter, or copy on any card to save to history.";
+      listEl.appendChild(emptyDiv);
+      return;
+    }
+
+    list.forEach((entry) => {
+      const item = document.createElement("div");
+      item.className = "history-item";
+
+      const main = document.createElement("div");
+      main.className = "history-main";
+
+      const timeSpan = document.createElement("span");
+      timeSpan.className = "history-time";
+      timeSpan.textContent = formatHistoryTime(entry.timestampMs);
+
+      const calcSpan = document.createElement("span");
+      calcSpan.className = "history-calc";
+      calcSpan.textContent = entry.calculatorLabel;
+
+      const inputsSpan = document.createElement("span");
+      inputsSpan.className = "history-inputs";
+      inputsSpan.textContent = entry.inputsText;
+
+      const arrowSpan = document.createElement("span");
+      arrowSpan.className = "history-arrow";
+      arrowSpan.textContent = "→";
+
+      const resultSpan = document.createElement("span");
+      resultSpan.className = "history-result";
+      resultSpan.textContent = entry.resultText;
+
+      main.append(timeSpan, calcSpan, inputsSpan, arrowSpan, resultSpan);
+
+      const actions = document.createElement("div");
+      actions.className = "history-row-actions";
+
+      const copyBtn = document.createElement("button");
+      copyBtn.className = "copy-btn history-copy-btn";
+      copyBtn.type = "button";
+      copyBtn.textContent = "copy";
+      copyBtn.addEventListener("click", (event) => {
+        copyText(entry.copyText || entry.resultText, event.currentTarget);
+      });
+
+      const restoreBtn = document.createElement("button");
+      restoreBtn.className = "reset-btn history-restore-btn";
+      restoreBtn.type = "button";
+      restoreBtn.textContent = "↺ restore";
+      restoreBtn.addEventListener("click", () => {
+        restoreHistoryEntry(entry);
+      });
+
+      actions.append(copyBtn, restoreBtn);
+      item.append(main, actions);
+      listEl.appendChild(item);
+    });
+  }
+
+  function recordHistoryFor(key) {
+    const entry = lastValidCalc[key];
+    if (!entry) return;
+    const updated = addHistoryEntry(entry);
+    renderHistory(updated);
+  }
+
+  function loadHistory() {
+    renderHistory(readHistoryFromStorage());
+  }
+
+  function resetFields(inputIds, resultId, updateFn) {
+    inputIds.forEach((id) => {
+      document.getElementById(id).value = "";
+    });
+    setResult(resultId, "—");
+    updateFn();
+  }
+
+  function clearAllCalculators() {
+    resetFields(["changeOrig", "changeNew"], "changeResult", updateChangeLive);
+    resetFields(["isWhatX", "isWhatY"], "percentResult", updatePercentLive);
+    resetFields(["whatX", "whatY"], "whatResult", updateWhatLive);
+    resetFields(
+      ["discountPrice", "discountPercent"],
+      "discountResult",
+      updateDiscountLive
+    );
+    resetFields(["baseX", "baseY"], "baseResult", updateBaseLive);
+    resetFields(["markupCost", "markupPrice"], "markupResult", updateMarkupLive);
+    resetFields(["taxAmount", "taxRate"], "taxResult", updateTaxLive);
+  }
+
+  // --- Modals & PWA install helper ---
+
+  function isRunningStandalone() {
+    return (
+      window.matchMedia("(display-mode: standalone)").matches ||
+      window.navigator.standalone === true
+    );
+  }
+
+  function openModal(modalId, focusBtnId) {
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+    modal.classList.remove("hidden");
+    document.getElementById(focusBtnId)?.focus({ preventScroll: true });
+  }
+
+  function closeModal(modalId, returnFocusId) {
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+    modal.classList.add("hidden");
+    document.getElementById(returnFocusId)?.focus({ preventScroll: true });
+  }
+
+  function updateInstallUi() {
+    const installBtn = document.getElementById("installAppBtn");
+    const fileNote = document.getElementById("installFileNote");
+    const promptBtn = document.getElementById("triggerPromptBtn");
+    if (!installBtn) return;
+
+    if (isRunningStandalone()) {
+      installBtn.classList.add("hidden");
+    } else {
+      installBtn.classList.remove("hidden");
+    }
+
+    if (fileNote) {
+      if (window.location.protocol === "file:") {
+        fileNote.classList.remove("hidden");
+      } else {
+        fileNote.classList.add("hidden");
+      }
+    }
+
+    if (promptBtn) {
+      if (deferredInstallPrompt) {
+        promptBtn.classList.remove("hidden");
+      } else {
+        promptBtn.classList.add("hidden");
+      }
+    }
+  }
+
+  async function triggerNativeInstallOrGuide() {
+    if (deferredInstallPrompt) {
+      try {
+        await deferredInstallPrompt.prompt();
+        await deferredInstallPrompt.userChoice;
+        deferredInstallPrompt = null;
+        updateInstallUi();
+        return;
+      } catch {
+        deferredInstallPrompt = null;
+      }
+    }
+    updateInstallUi();
+    openModal("installModal", "closeInstallBtn");
+  }
+
+  function bindControls() {
+    document
+      .getElementById("installAppBtn")
+      .addEventListener("click", triggerNativeInstallOrGuide);
+    document
+      .getElementById("triggerPromptBtn")
+      .addEventListener("click", async () => {
+        closeModal("installModal", "installAppBtn");
+        await triggerNativeInstallOrGuide();
+      });
+
+    document
+      .getElementById("clearAllBtn")
+      .addEventListener("click", clearAllCalculators);
+    document
+      .getElementById("aboutBtn")
+      .addEventListener("click", () => openModal("aboutModal", "closeAboutBtn"));
+
+    document
+      .getElementById("closeAboutBtn")
+      .addEventListener("click", () => closeModal("aboutModal", "aboutBtn"));
+    document
+      .getElementById("closeAboutXBtn")
+      .addEventListener("click", () => closeModal("aboutModal", "aboutBtn"));
+    document.getElementById("aboutModal").addEventListener("click", (event) => {
+      if (event.target.id === "aboutModal") closeModal("aboutModal", "aboutBtn");
+    });
+
+    document
+      .getElementById("closeInstallBtn")
+      .addEventListener("click", () =>
+        closeModal("installModal", "installAppBtn")
+      );
+    document
+      .getElementById("closeInstallXBtn")
+      .addEventListener("click", () =>
+        closeModal("installModal", "installAppBtn")
+      );
+    document
+      .getElementById("installModal")
+      .addEventListener("click", (event) => {
+        if (event.target.id === "installModal") {
+          closeModal("installModal", "installAppBtn");
+        }
+      });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      const about = document.getElementById("aboutModal");
+      const install = document.getElementById("installModal");
+      if (about && !about.classList.contains("hidden")) {
+        closeModal("aboutModal", "aboutBtn");
+      } else if (install && !install.classList.contains("hidden")) {
+        closeModal("installModal", "installAppBtn");
+      }
+    });
+
+    window.addEventListener("beforeinstallprompt", (event) => {
+      event.preventDefault();
+      deferredInstallPrompt = event;
+      updateInstallUi();
+    });
+
+    window.addEventListener("appinstalled", () => {
+      deferredInstallPrompt = null;
+      closeModal("installModal", "aboutBtn");
+      updateInstallUi();
+    });
+
+    // Swap buttons across all 7 cards
+    document
+      .getElementById("swapChangeBtn")
+      .addEventListener("click", () =>
+        swapFields("changeOrig", "changeNew", updateChangeLive)
+      );
+    document
+      .getElementById("swapPercentBtn")
+      .addEventListener("click", () =>
+        swapFields("isWhatX", "isWhatY", updatePercentLive)
+      );
+    document
+      .getElementById("swapWhatBtn")
+      .addEventListener("click", () =>
+        swapFields("whatX", "whatY", updateWhatLive)
+      );
+    document
+      .getElementById("swapDiscountBtn")
+      .addEventListener("click", () =>
+        swapFields("discountPrice", "discountPercent", updateDiscountLive)
+      );
+    document
+      .getElementById("swapBaseBtn")
+      .addEventListener("click", () =>
+        swapFields("baseX", "baseY", updateBaseLive)
+      );
+    document
+      .getElementById("swapMarkupBtn")
+      .addEventListener("click", () =>
+        swapFields("markupCost", "markupPrice", updateMarkupLive)
+      );
+    document
+      .getElementById("swapTaxBtn")
+      .addEventListener("click", () =>
+        swapFields("taxAmount", "taxRate", updateTaxLive)
+      );
+
+    // Tax mode toggle
+    document
+      .getElementById("taxModeAddBtn")
+      .addEventListener("click", () => setTaxMode("add"));
+    document
+      .getElementById("taxModeExtractBtn")
+      .addEventListener("click", () => setTaxMode("extract"));
+
+    // Card buttons
+    document.getElementById("calcChangeBtn").addEventListener("click", () => {
+      updateChangeLive();
+      recordHistoryFor("change");
+    });
+    document
+      .getElementById("resetChangeBtn")
+      .addEventListener("click", () =>
+        resetFields(["changeOrig", "changeNew"], "changeResult", updateChangeLive)
+      );
+    document
+      .getElementById("copyChangeBtn")
+      .addEventListener("click", async (event) => {
+        await copyText(
+          document.getElementById("changeResult").innerText.replace(/^=\s*/, ""),
+          event.currentTarget
+        );
+        recordHistoryFor("change");
+      });
+
+    document.getElementById("calcPercentBtn").addEventListener("click", () => {
+      updatePercentLive();
+      recordHistoryFor("percent");
+    });
+    document
+      .getElementById("resetPercentBtn")
+      .addEventListener("click", () =>
+        resetFields(["isWhatX", "isWhatY"], "percentResult", updatePercentLive)
+      );
+    document
+      .getElementById("copyPercentBtn")
+      .addEventListener("click", async (event) => {
+        await copyText(
+          document
+            .getElementById("percentResult")
+            .innerText.replace(/^=\s*/, ""),
+          event.currentTarget
+        );
+        recordHistoryFor("percent");
+      });
+
+    document.getElementById("calcWhatBtn").addEventListener("click", () => {
+      updateWhatLive();
+      recordHistoryFor("what");
+    });
+    document
+      .getElementById("resetWhatBtn")
+      .addEventListener("click", () =>
+        resetFields(["whatX", "whatY"], "whatResult", updateWhatLive)
+      );
+    document
+      .getElementById("copyWhatBtn")
+      .addEventListener("click", async (event) => {
+        await copyText(
+          document.getElementById("whatResult").innerText.replace(/^=\s*/, ""),
+          event.currentTarget
+        );
+        recordHistoryFor("what");
+      });
+
+    document
+      .getElementById("calcDiscountBtn")
+      .addEventListener("click", () => {
+        updateDiscountLive();
+        recordHistoryFor("discount");
+      });
+    document
+      .getElementById("resetDiscountBtn")
+      .addEventListener("click", () =>
+        resetFields(
+          ["discountPrice", "discountPercent"],
+          "discountResult",
+          updateDiscountLive
+        )
+      );
+    document
+      .getElementById("copyDiscountBtn")
+      .addEventListener("click", async (event) => {
+        await copyText(
+          document
+            .getElementById("discountResult")
+            .innerText.replace(/^=\s*/, ""),
+          event.currentTarget
+        );
+        recordHistoryFor("discount");
+      });
+
+    document.getElementById("calcBaseBtn").addEventListener("click", () => {
+      updateBaseLive();
+      recordHistoryFor("base");
+    });
+    document
+      .getElementById("resetBaseBtn")
+      .addEventListener("click", () =>
+        resetFields(["baseX", "baseY"], "baseResult", updateBaseLive)
+      );
+    document
+      .getElementById("copyBaseBtn")
+      .addEventListener("click", async (event) => {
+        await copyText(
+          document.getElementById("baseResult").innerText.replace(/^=\s*/, ""),
+          event.currentTarget
+        );
+        recordHistoryFor("base");
+      });
+
+    document.getElementById("calcMarkupBtn").addEventListener("click", () => {
+      updateMarkupLive();
+      recordHistoryFor("markup");
+    });
+    document
+      .getElementById("resetMarkupBtn")
+      .addEventListener("click", () =>
+        resetFields(
+          ["markupCost", "markupPrice"],
+          "markupResult",
+          updateMarkupLive
+        )
+      );
+    document
+      .getElementById("copyMarkupBtn")
+      .addEventListener("click", async (event) => {
+        await copyText(
+          document.getElementById("markupResult").innerText.replace(/^=\s*/, ""),
+          event.currentTarget
+        );
+        recordHistoryFor("markup");
+      });
+
+    document.getElementById("calcTaxBtn").addEventListener("click", () => {
+      updateTaxLive();
+      recordHistoryFor("tax");
+    });
+    document
+      .getElementById("resetTaxBtn")
+      .addEventListener("click", () =>
+        resetFields(["taxAmount", "taxRate"], "taxResult", updateTaxLive)
+      );
+    document
+      .getElementById("copyTaxBtn")
+      .addEventListener("click", async (event) => {
+        await copyText(
+          document.getElementById("taxResult").innerText.replace(/^=\s*/, ""),
+          event.currentTarget
+        );
+        recordHistoryFor("tax");
+      });
+
+    // History clear confirmation flow
+    const clearHistoryBtn = document.getElementById("clearHistoryBtn");
+    const clearConfirmGroup = document.getElementById("clearHistoryConfirm");
+    clearHistoryBtn.addEventListener("click", () => {
+      clearHistoryBtn.classList.add("hidden");
+      clearConfirmGroup.classList.remove("hidden");
+    });
+    document
+      .getElementById("cancelClearHistoryBtn")
+      .addEventListener("click", () => {
+        clearConfirmGroup.classList.add("hidden");
+        clearHistoryBtn.classList.remove("hidden");
+      });
+    document
+      .getElementById("confirmClearHistoryBtn")
+      .addEventListener("click", () => {
+        renderHistory(clearHistoryStorage());
+        clearConfirmGroup.classList.add("hidden");
+        clearHistoryBtn.classList.remove("hidden");
+      });
+  }
+
+  function bindLiveUpdates() {
+    document
+      .getElementById("changeOrig")
+      .addEventListener("input", updateChangeLive);
+    document
+      .getElementById("changeNew")
+      .addEventListener("input", updateChangeLive);
+
+    document
+      .getElementById("isWhatX")
+      .addEventListener("input", updatePercentLive);
+    document
+      .getElementById("isWhatY")
+      .addEventListener("input", updatePercentLive);
+
+    document.getElementById("whatX").addEventListener("input", updateWhatLive);
+    document.getElementById("whatY").addEventListener("input", updateWhatLive);
+
+    document
+      .getElementById("discountPrice")
+      .addEventListener("input", updateDiscountLive);
+    document
+      .getElementById("discountPercent")
+      .addEventListener("input", updateDiscountLive);
+
+    document.getElementById("baseX").addEventListener("input", updateBaseLive);
+    document.getElementById("baseY").addEventListener("input", updateBaseLive);
+
+    document
+      .getElementById("markupCost")
+      .addEventListener("input", updateMarkupLive);
+    document
+      .getElementById("markupPrice")
+      .addEventListener("input", updateMarkupLive);
+
+    document
+      .getElementById("taxAmount")
+      .addEventListener("input", updateTaxLive);
+    document.getElementById("taxRate").addEventListener("input", updateTaxLive);
+  }
+
+  function bindEnterKeys() {
+    attachEnterKey(["changeOrig", "changeNew"], () => {
+      updateChangeLive();
+      recordHistoryFor("change");
+    });
+    attachEnterKey(["isWhatX", "isWhatY"], () => {
+      updatePercentLive();
+      recordHistoryFor("percent");
+    });
+    attachEnterKey(["whatX", "whatY"], () => {
+      updateWhatLive();
+      recordHistoryFor("what");
+    });
+    attachEnterKey(["discountPrice", "discountPercent"], () => {
+      updateDiscountLive();
+      recordHistoryFor("discount");
+    });
+    attachEnterKey(["baseX", "baseY"], () => {
+      updateBaseLive();
+      recordHistoryFor("base");
+    });
+    attachEnterKey(["markupCost", "markupPrice"], () => {
+      updateMarkupLive();
+      recordHistoryFor("markup");
+    });
+    attachEnterKey(["taxAmount", "taxRate"], () => {
+      updateTaxLive();
+      recordHistoryFor("tax");
+    });
+  }
+
+  function registerServiceWorkerIfSupported() {
+    const isHttpOrigin =
+      window.location.protocol === "https:" ||
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1";
+    if (isHttpOrigin && "serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./sw.js", { scope: "./" }).catch(() => {});
+    }
+  }
+
+  function initialize() {
+    bindControls();
+    bindLiveUpdates();
+    bindEnterKeys();
+
+    updateChangeLive();
+    updatePercentLive();
+    updateWhatLive();
+    updateDiscountLive();
+    updateBaseLive();
+    updateMarkupLive();
+    updateTaxLive();
+    loadHistory();
+    updateInstallUi();
+    registerServiceWorkerIfSupported();
+
+    // Avoid forcing the virtual keyboard open on touch devices.
+    if (!window.matchMedia("(pointer: coarse)").matches) {
+      document.getElementById("changeOrig")?.focus();
+    }
+  }
+
+  if (typeof window !== "undefined") {
+    initialize();
+  }
+})();
+</script>
+</body>
+</html>

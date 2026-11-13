@@ -2,9 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'sha256-ILHXvQ4ZgNM4TE5UGxcc2CPuQxt/yfauxBvSe5luYrw='; script-src 'sha256-/h1tk+bbUTs570GzviUW0201fgWk3zmmnbV8WX86sOY='; worker-src 'self'; child-src 'self'; img-src 'self' data:; manifest-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none';">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0E0F12">
   <meta name="color-scheme" content="dark">
+  <meta name="referrer" content="no-referrer">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -687,6 +689,38 @@
       margin-bottom: 0.9rem;
     }
 
+    .clipboard-scratch {
+      position: fixed;
+      top: -9999px;
+      left: -9999px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .about-url-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.65rem;
+      flex-wrap: wrap;
+      margin-top: 0.45rem;
+    }
+
+    .about-url-link {
+      color: #E9A715;
+      font-size: 0.74rem;
+      text-decoration: none;
+      word-break: break-all;
+      border-bottom: 1px dashed rgba(233, 167, 21, 0.5);
+    }
+
+    .about-url-link:hover,
+    .about-url-link:focus-visible {
+      color: #94C59A;
+      border-bottom-color: #94C59A;
+      outline: none;
+    }
+
     .modal-footer {
       display: flex;
       justify-content: flex-end;
@@ -1071,7 +1105,7 @@
     </div>
   </div>
 
-  <footer>Mohamed Sayed · Ahmed Emara · DeepSeek · ChatGPT · Antigravity · 2026 · <span id="appVersion">Mobile &amp; Web v2.1.0</span></footer>
+  <footer>Mohamed Sayed · Ahmed Emara · DeepSeek · ChatGPT · Antigravity · 2026 · <span id="appVersion">Mobile &amp; Web v2.1.1</span></footer>
 </div>
 
 <div class="modal-backdrop hidden" id="aboutModal" role="dialog" aria-modal="true" aria-labelledby="aboutModalTitle">
@@ -1085,7 +1119,7 @@
       <div class="about-icon-badge" aria-hidden="true">%</div>
       <div>
         <div class="about-app-name" id="aboutAppName">Percentage Calculator Tool</div>
-        <div class="about-version-pill" id="aboutVersionPill">Mobile &amp; Web v2.1.0 · Offline HTML / PWA</div>
+        <div class="about-version-pill" id="aboutVersionPill">Mobile &amp; Web v2.1.1 · Offline HTML / PWA</div>
       </div>
     </div>
 
@@ -1115,6 +1149,15 @@
       <p class="about-privacy-text" id="aboutPrivacyText">Fully offline. No tracking, no network calls. Calculation history is saved locally on this device only and can be cleared anytime.</p>
     </div>
 
+    <div class="about-box">
+      <div class="about-box-title">OFFICIAL WEB APP (PWA)</div>
+      <p class="about-privacy-text">Bookmark or install from this official HTTPS link on iPhone Safari or Android Chrome:</p>
+      <div class="about-url-row">
+        <a class="about-url-link" id="webAppUrlLink" href="https://ciphervaults.github.io/Percentage-Calculator-Tool/" target="_blank" rel="noopener noreferrer">https://ciphervaults.github.io/Percentage-Calculator-Tool/</a>
+        <button class="copy-btn" id="copyWebUrlBtn" type="button">copy link</button>
+      </div>
+    </div>
+
     <div class="modal-footer">
       <button class="calc-btn" id="closeAboutBtn" type="button">close [esc]</button>
     </div>
@@ -1128,7 +1171,7 @@
       <button class="modal-close-x" id="closeInstallXBtn" type="button" aria-label="Close Install dialog">[ × ]</button>
     </div>
 
-    <p class="install-note hidden" id="installFileNote">You are opening this file directly from storage (file://). To add it to your Home Screen as an offline app with an icon, open the hosted HTTPS link in iPhone Safari or Android Chrome.</p>
+    <p class="install-note hidden" id="installFileNote">You are opening this file directly from storage (file://). To add it to your Home Screen as an offline app with an icon, open <strong>https://ciphervaults.github.io/Percentage-Calculator-Tool/</strong> in iPhone Safari or Android Chrome.</p>
 
     <div class="about-box" id="installIosBox">
       <div class="about-box-title">IPHONE / IPAD (SAFARI)</div>
@@ -1163,6 +1206,8 @@
 
   const COPY_FEEDBACK_MS = 1200;
   const HISTORY_LIMIT = 500;
+  const MAX_FIELD_LEN = 256;
+  const WEB_APP_URL = "https://ciphervaults.github.io/Percentage-Calculator-Tool/";
   const HISTORY_STORAGE_KEY = "pct_tool_history_v2";
   const ALLOWED_CALCULATORS = new Set([
     "change",
@@ -1363,29 +1408,100 @@
 
   // --- Persistent on-device history (localStorage with in-memory fallback) ---
 
+  function isValidHistoryField(value) {
+    return (
+      typeof value === "string" &&
+      value.trim().length > 0 &&
+      value.length <= MAX_FIELD_LEN
+    );
+  }
+
+  function sanitizeHistoryItem(item) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+    if (!ALLOWED_CALCULATORS.has(item.calculator)) return null;
+    if (
+      !isValidHistoryField(item.calculatorLabel) ||
+      !isValidHistoryField(item.inputA) ||
+      !isValidHistoryField(item.inputB) ||
+      !isValidHistoryField(item.inputsText) ||
+      !isValidHistoryField(item.resultText)
+    ) {
+      return null;
+    }
+    if (item.copyText !== undefined && !isValidHistoryField(item.copyText)) {
+      return null;
+    }
+    const mode = item.mode ?? null;
+    if (mode !== null && mode !== "add" && mode !== "extract") {
+      return null;
+    }
+    const idNum = Number(item.id);
+    const tsNum = Number(item.timestampMs);
+    return {
+      id: Number.isFinite(idNum) && idNum >= 0 ? Math.trunc(idNum) : 0,
+      timestampMs: Number.isFinite(tsNum) && tsNum >= 0 ? Math.trunc(tsNum) : 0,
+      calculator: item.calculator,
+      calculatorLabel: item.calculatorLabel,
+      inputA: item.inputA,
+      inputB: item.inputB,
+      mode,
+      inputsText: item.inputsText,
+      resultText: item.resultText,
+      copyText: item.copyText ?? item.resultText
+    };
+  }
+
+  function buildValidHistoryCandidate(candidate) {
+    if (
+      !candidate ||
+      typeof candidate !== "object" ||
+      !ALLOWED_CALCULATORS.has(candidate.calculator) ||
+      !isValidHistoryField(candidate.calculatorLabel) ||
+      !isValidHistoryField(candidate.inputA) ||
+      !isValidHistoryField(candidate.inputB) ||
+      !isValidHistoryField(candidate.inputsText) ||
+      !isValidHistoryField(candidate.resultText) ||
+      !isValidHistoryField(candidate.copyText)
+    ) {
+      return null;
+    }
+    const mode = candidate.mode ?? null;
+    if (mode !== null && mode !== "add" && mode !== "extract") {
+      return null;
+    }
+    return candidate;
+  }
+
   function readHistoryFromStorage() {
+    let raw;
     try {
-      const raw = window.localStorage.getItem(HISTORY_STORAGE_KEY);
-      if (!raw) return memoryHistory.slice(0, HISTORY_LIMIT);
+      raw = window.localStorage.getItem(HISTORY_STORAGE_KEY);
+    } catch {
+      return memoryHistory.slice(0, HISTORY_LIMIT);
+    }
+    if (raw === null) {
+      memoryHistory = [];
+      return [];
+    }
+    try {
       const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return [];
-      const sanitized = parsed
-        .filter(
-          (item) =>
-            item &&
-            typeof item === "object" &&
-            ALLOWED_CALCULATORS.has(item.calculator) &&
-            typeof item.calculatorLabel === "string" &&
-            typeof item.inputA === "string" &&
-            typeof item.inputB === "string" &&
-            typeof item.inputsText === "string" &&
-            typeof item.resultText === "string"
-        )
-        .slice(0, HISTORY_LIMIT);
+      if (!Array.isArray(parsed)) {
+        memoryHistory = [];
+        return [];
+      }
+      const sanitized = [];
+      for (const item of parsed) {
+        const clean = sanitizeHistoryItem(item);
+        if (clean) {
+          sanitized.push(clean);
+          if (sanitized.length >= HISTORY_LIMIT) break;
+        }
+      }
       memoryHistory = sanitized;
       return sanitized;
     } catch {
-      return memoryHistory.slice(0, HISTORY_LIMIT);
+      memoryHistory = [];
+      return [];
     }
   }
 
@@ -1401,7 +1517,8 @@
   }
 
   function addHistoryEntry(entry) {
-    if (!entry || !ALLOWED_CALCULATORS.has(entry.calculator)) {
+    const cleanEntry = sanitizeHistoryItem(entry);
+    if (!cleanEntry) {
       return readHistoryFromStorage();
     }
     const entries = readHistoryFromStorage();
@@ -1410,11 +1527,11 @@
 
     if (
       first &&
-      first.calculator === entry.calculator &&
-      first.inputA === entry.inputA &&
-      first.inputB === entry.inputB &&
-      (first.mode ?? null) === (entry.mode ?? null) &&
-      first.resultText === entry.resultText
+      first.calculator === cleanEntry.calculator &&
+      first.inputA === cleanEntry.inputA &&
+      first.inputB === cleanEntry.inputB &&
+      (first.mode ?? null) === (cleanEntry.mode ?? null) &&
+      first.resultText === cleanEntry.resultText
     ) {
       entries[0] = { ...first, timestampMs: now };
       return writeHistoryToStorage(entries);
@@ -1423,16 +1540,9 @@
     const nextId =
       entries.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1;
     const newItem = {
+      ...cleanEntry,
       id: nextId,
-      timestampMs: now,
-      calculator: entry.calculator,
-      calculatorLabel: entry.calculatorLabel,
-      inputA: entry.inputA,
-      inputB: entry.inputB,
-      mode: entry.mode ?? null,
-      inputsText: entry.inputsText,
-      resultText: entry.resultText,
-      copyText: entry.copyText || entry.resultText
+      timestampMs: now
     };
     entries.unshift(newItem);
     return writeHistoryToStorage(entries);
@@ -1524,10 +1634,7 @@
     const ta = document.createElement("textarea");
     ta.value = text;
     ta.setAttribute("readonly", "");
-    ta.style.position = "fixed";
-    ta.style.top = "-9999px";
-    ta.style.left = "-9999px";
-    ta.style.opacity = "0";
+    ta.className = "clipboard-scratch";
     document.body.appendChild(ta);
     ta.focus({ preventScroll: true });
     ta.select();
@@ -1611,7 +1718,7 @@
     resultSpan.textContent = `→ ${result.liveResult}`;
     setResult("changeResult", result.label);
 
-    lastValidCalc.change = {
+    lastValidCalc.change = buildValidHistoryCandidate({
       calculator: "change",
       calculatorLabel: "Percentage Change",
       inputA: getRawInput("changeOrig"),
@@ -1620,7 +1727,7 @@
       inputsText: `${orig} → ${newVal}`,
       resultText: result.label,
       copyText: result.label
-    };
+    });
   }
 
   function updatePercentLive() {
@@ -1651,7 +1758,7 @@
     resultSpan.textContent = `→ ${result.label}`;
     setResult("percentResult", result.label);
 
-    lastValidCalc.percent = {
+    lastValidCalc.percent = buildValidHistoryCandidate({
       calculator: "percent",
       calculatorLabel: "Percentage of Total",
       inputA: getRawInput("isWhatX"),
@@ -1660,7 +1767,7 @@
       inputsText: `${x} of ${y}`,
       resultText: result.label,
       copyText: result.label
-    };
+    });
   }
 
   function updateWhatLive() {
@@ -1683,7 +1790,7 @@
     resultSpan.textContent = `→ ${result.label}`;
     setResult("whatResult", result.label);
 
-    lastValidCalc.what = {
+    lastValidCalc.what = buildValidHistoryCandidate({
       calculator: "what",
       calculatorLabel: "Calculate Percentage",
       inputA: getRawInput("whatX"),
@@ -1692,7 +1799,7 @@
       inputsText: `${x}% of ${y}`,
       resultText: result.label,
       copyText: result.label
-    };
+    });
   }
 
   function updateDiscountLive() {
@@ -1721,7 +1828,7 @@
     resultSpan.textContent = `→ final: ${result.finalText} | saved: ${result.savedText}`;
     setResult("discountResult", result.label);
 
-    lastValidCalc.discount = {
+    lastValidCalc.discount = buildValidHistoryCandidate({
       calculator: "discount",
       calculatorLabel: "Discount",
       inputA: getRawInput("discountPrice"),
@@ -1730,7 +1837,7 @@
       inputsText: `${price} (−${disc}%)`,
       resultText: `Final: ${result.finalText} · Saved: ${result.savedText}`,
       copyText: result.copyText
-    };
+    });
   }
 
   function updateBaseLive() {
@@ -1761,7 +1868,7 @@
     resultSpan.textContent = `→ ${result.label}`;
     setResult("baseResult", result.label);
 
-    lastValidCalc.base = {
+    lastValidCalc.base = buildValidHistoryCandidate({
       calculator: "base",
       calculatorLabel: "Find Original Value",
       inputA: getRawInput("baseX"),
@@ -1770,7 +1877,7 @@
       inputsText: `${x} is ${y}%`,
       resultText: result.label,
       copyText: result.label
-    };
+    });
   }
 
   function updateMarkupLive() {
@@ -1813,7 +1920,7 @@
     resultSpan.textContent = `→ ${result.liveResult}`;
     setResult("markupResult", result.label);
 
-    lastValidCalc.markup = {
+    lastValidCalc.markup = buildValidHistoryCandidate({
       calculator: "markup",
       calculatorLabel: "Markup & Margin",
       inputA: getRawInput("markupCost"),
@@ -1822,7 +1929,7 @@
       inputsText: `Cost ${cost} → Price ${price}`,
       resultText: `Profit: ${result.profitText} · Markup: ${result.markupText} · Margin: ${result.marginText}`,
       copyText: result.copyText
-    };
+    });
   }
 
   function setTaxMode(newMode, triggerUpdate = true) {
@@ -1902,7 +2009,7 @@
     resultSpan.textContent = `→ ${result.liveResult}`;
     setResult("taxResult", result.label);
 
-    lastValidCalc.tax = {
+    lastValidCalc.tax = buildValidHistoryCandidate({
       calculator: "tax",
       calculatorLabel: mode === "extract" ? "Tax / VAT (Extract)" : "Tax / VAT (Add)",
       inputA: getRawInput("taxAmount"),
@@ -1917,7 +2024,7 @@
           ? `Net: ${result.netText} · Tax: ${result.taxText}`
           : `Total: ${result.totalText} · Tax: ${result.taxText}`,
       copyText: result.copyText
-    };
+    });
   }
 
   // --- History UI ---
@@ -1946,8 +2053,8 @@
       tax: { card: "card-tax", a: "taxAmount", b: "taxRate", fn: updateTaxLive }
     };
 
+    if (!entry || !Object.hasOwn(map, entry.calculator)) return;
     const target = map[entry.calculator];
-    if (!target) return;
 
     if (entry.calculator === "tax" && entry.mode) {
       setTaxMode(entry.mode, false);
@@ -2158,6 +2265,11 @@
     document
       .getElementById("aboutBtn")
       .addEventListener("click", () => openModal("aboutModal", "closeAboutBtn"));
+    document
+      .getElementById("copyWebUrlBtn")
+      ?.addEventListener("click", (event) => {
+        copyText(WEB_APP_URL, event.currentTarget);
+      });
 
     document
       .getElementById("closeAboutBtn")
@@ -2208,6 +2320,12 @@
       deferredInstallPrompt = null;
       closeModal("installModal", "aboutBtn");
       updateInstallUi();
+    });
+
+    window.addEventListener("storage", (event) => {
+      if (event.key === HISTORY_STORAGE_KEY || event.key === null) {
+        loadHistory();
+      }
     });
 
     // Swap buttons across all 7 cards

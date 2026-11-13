@@ -1,6 +1,6 @@
 [package]
 name = "percentage-calculator-tool"
-version = "2.1.0"
+version = "2.1.1"
 edition = "2021"
 description = "Offline desktop percentage calculator built with Tauri and Rust."
 authors = ["Mohamed Sayed", "Ahmed Emara", "DeepSeek", "ChatGPT", "Antigravity"]

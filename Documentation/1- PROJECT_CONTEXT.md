@@ -43,24 +43,24 @@ In **v1.0–v1.1** the desktop shell used Electron. In **v2.0.0** the app was re
 
 ## Final Scope Definition
 
-### Included in the Current Version (v2.1.0)
+### Included in the Current Version (v2.1.1)
 
 - Tauri v2 + Rust desktop app
 - Windows native title bar
-- offline local webview UI (`ui/`)
+- offline local webview UI (`ui/`) with strict CSP (`connect-src 'none'`, `object-src 'none'`, `base-uri 'none'`, `form-action 'none'`, `frame-ancestors 'none'`) and zero unused Tauri capability permissions (`permissions: []`)
 - seven percentage, pricing, and tax calculators implemented in Rust (`crates/percent-core`)
 - `⇅ swap values` pill between the two input fields in every card
-- persistent local calculation history (up to 500 entries stored at `%APPDATA%\com.percentagecalculator.tool\history.json`, with `copy`, `↺ restore`, and `clear history`)
+- hardened persistent local calculation history (up to 500 entries stored at `%APPDATA%\com.percentagecalculator.tool\history.json` with symlink checks, 1 MiB read cap, load-time validation, atomic unique `.json.tmp` commits, and `copy` / `↺ restore` / `clear history`)
 - live formula previews
-- copy-to-clipboard buttons with visible feedback
+- copy-to-clipboard buttons with visible feedback (bounded 4 KiB IPC write)
 - Clear All button
-- redesigned in-app dark terminal About modal crediting **Mohamed Sayed · Ahmed Emara · DeepSeek · ChatGPT · Antigravity**
-- Rust unit tests + 10,661-case golden parity suite against v1.1 JS math
+- redesigned in-app dark terminal About modal crediting **Mohamed Sayed · Ahmed Emara · DeepSeek · ChatGPT · Antigravity** and displaying the official Web App URL (`https://ciphervaults.github.io/Percentage-Calculator-Tool/`)
+- Rust unit tests (including storage/validation tests) + 10,661-case golden parity suite against v1.1 JS math
 - real-window Tauri smoke test (`--smoke-test`)
 - Windows NSIS and MSI installer builds
 - Windows standalone portable executable
-- standalone single-file Mobile & Web PWA HTML edition (`mobile/`) for iPhone Safari (Add to Home Screen) and Android Chrome (Install app)
-- GitHub Actions CI workflows for automated Windows builds, tests, and GitHub Pages deployment
+- hardened standalone single-file Mobile & Web PWA HTML edition (`mobile/`) deployed at `https://ciphervaults.github.io/Percentage-Calculator-Tool/` for iPhone Safari (Add to Home Screen) and Android Chrome (Install app), protected by a SHA-256 hash CSP `<meta>` tag, scope-checked offline Service Worker, and schema-validated `localStorage`
+- SHA-pinned GitHub Actions CI/CD workflows for automated Windows builds, verification, `SHA256SUMS.txt` release checksums, and main-only GitHub Pages deployment
 - project documentation modeled after the AI Ambassadors documentation structure
 
 ---
@@ -126,7 +126,7 @@ The project is considered successful if:
 - the calculator works locally as a Tauri v2 desktop app
 - the original five calculator sections preserve v1.1 behavior byte-for-byte, and the new Markup & Margin and Reverse Tax/VAT calculators use the same formatting rules
 - input swapping, persistent local history, copy feedback, Clear All, and the dark About modal work reliably
-- the app exposes narrow, least-privilege Tauri commands and capabilities
+- the app enforces strict defense-in-depth (least-privilege `permissions: []`, strict desktop and SHA-256 mobile CSPs, validated/atomic history persistence, and SHA-pinned CI with `SHA256SUMS.txt`)
 - the Windows installer and portable builds are generated automatically in CI
 - the documentation explains the project context and architecture clearly
 - the Git history tells a readable project story
@@ -135,10 +135,10 @@ The project is considered successful if:
 
 ## Current Final State
 
-At the **v2.1.0** stage, the project is:
+At the **v2.1.1** stage, the project is:
 
-- implemented as a Cargo workspace (`percent-core` + `src-tauri`) with a static `ui/` frontend
-- tested with Rust unit tests, 10,661 golden parity cases, and an expanded live desktop smoke test
-- packaged for Windows as NSIS, MSI, and portable builds via GitHub Actions
+- implemented as a Cargo workspace (`percent-core` + `src-tauri`) with a static `ui/` frontend and a hardened standalone `mobile/` PWA live at `https://ciphervaults.github.io/Percentage-Calculator-Tool/`
+- tested with Rust unit tests, 10,661 golden parity cases (Rust & Mobile HTML), automated DOM/CSP verification, and an expanded live desktop smoke test
+- packaged for Windows as NSIS, MSI, portable `.exe`, standalone Mobile HTML, and `SHA256SUMS.txt` via SHA-pinned GitHub Actions
 - documented in a numbered `Documentation` folder
-- preserved with the `v1.1.0-electron` tag pointing at the final Electron version and `v2.0.0` pointing at the initial Tauri rebuild
+- preserved with the `v1.1.0-electron` tag pointing at the final Electron version, `v2.0.0` pointing at the initial Tauri rebuild, and `v2.1.0` marking the initial v2.1 feature and mobile PWA release

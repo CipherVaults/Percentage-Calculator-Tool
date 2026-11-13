@@ -20,20 +20,76 @@ concurrency:
 jobs:
   deploy:
     name: Deploy mobile/ to GitHub Pages
+    if: github.ref == 'refs/heads/main'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Verify mobile/index.html 10k parity, CSP hashes & DOM hygiene
+        run: |
+          node -e '
+            const fs = require("fs");
+            const vm = require("vm");
+            const crypto = require("crypto");
+            const assert = require("assert");
+
+            const html = fs.readFileSync("mobile/index.html", "utf8");
+            const styleMatch = html.match(/<style>([\s\S]*?)<\/style>/);
+            const scriptMatch = html.match(/<script>([\s\S]*?)<\/script>/);
+            assert(styleMatch && scriptMatch, "Missing <style> or <script> in mobile/index.html");
+
+            const cspMatch = html.match(/<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]+)"/i);
+            assert(cspMatch, "Missing CSP <meta> tag in mobile/index.html");
+            const csp = cspMatch[1];
+
+            const styleHash = crypto.createHash("sha256").update(styleMatch[1], "utf8").digest("base64");
+            const scriptHash = crypto.createHash("sha256").update(scriptMatch[1], "utf8").digest("base64");
+            assert(csp.includes(`'\''sha256-${styleHash}'\''`), `CSP missing style hash sha256-${styleHash}`);
+            assert(csp.includes(`'\''sha256-${scriptHash}'\''`), `CSP missing script hash sha256-${scriptHash}`);
+            assert(!/frame-ancestors/i.test(csp), "CSP <meta> must not include frame-ancestors");
+
+            const swCode = fs.readFileSync("mobile/sw.js", "utf8");
+            for (const src of [scriptMatch[1], swCode]) {
+              assert(!/\.innerHTML\b|\.outerHTML\b|\beval\s*\(|\bnew\s+Function\b/.test(src), "Forbidden DOM/eval sink found in mobile runtime");
+            }
+
+            const fnStart = scriptMatch[1].indexOf("function formatDecimal");
+            const fnEnd = scriptMatch[1].indexOf("// --- Persistent on-device history");
+            assert(fnStart !== -1 && fnEnd > fnStart, "Could not locate math engine boundaries");
+            const ctx = { Number, Math };
+            vm.runInNewContext(scriptMatch[1].slice(fnStart, fnEnd), ctx);
+            const parseNum = (s) => (s === "NaN" ? NaN : s === "Infinity" ? Infinity : s === "-Infinity" ? -Infinity : Number(s));
+            const cases = JSON.parse(fs.readFileSync("crates/percent-core/tests/fixtures/golden.json", "utf8"));
+            for (const c of cases) {
+              if (c.f === "formatDecimal") assert.strictEqual(ctx.formatDecimal(parseNum(c.a[0])), c.r);
+              else if (c.f === "discount") {
+                const act = ctx.calcDiscount(parseNum(c.a[0]), parseNum(c.a[1]));
+                assert.strictEqual(act.label, c.r.label);
+                assert.strictEqual(act.copyText, c.r.copyText);
+              } else {
+                const a = parseNum(c.a[0]), b = parseNum(c.a[1]);
+                const act = c.f === "percentageChange" ? ctx.calcChange(a, b)
+                  : c.f === "percentageOfTotal" ? ctx.calcPercentOfTotal(a, b)
+                  : c.f === "percentagePortion" ? ctx.calcPortion(a, b)
+                  : ctx.calcOriginal(a, b);
+                if (c.r.ok) { assert.strictEqual(act.ok, "true"); assert.strictEqual(act.label, c.r.label); }
+                else { assert.strictEqual(act.ok, "false"); assert.strictEqual(act.error, c.r.error); }
+              }
+            }
+            console.log(`Pages pre-deploy verified (${cases.length} cases, CSP hashes OK).`);
+          '
       - name: Setup Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
         with:
           enablement: true
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
           path: "mobile"
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4

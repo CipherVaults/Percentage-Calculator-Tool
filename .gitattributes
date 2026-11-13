@@ -1,0 +1,9 @@
+# Ensure standalone web and mobile HTML files preserve LF line endings
+# across Windows and Linux checkouts so embedded SHA-256 CSP hashes match identically.
+* text=auto
+mobile/*.html text eol=lf
+mobile/*.js text eol=lf
+mobile/*.webmanifest text eol=lf
+ui/*.html text eol=lf
+ui/*.css text eol=lf
+ui/*.js text eol=lf

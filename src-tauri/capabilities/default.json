@@ -3,8 +3,5 @@
   "identifier": "default",
   "description": "Least-privilege capability for the main calculator window.",
   "windows": ["main"],
-  "permissions": [
-    "core:default",
-    "clipboard-manager:allow-write-text"
-  ]
+  "permissions": []
 }

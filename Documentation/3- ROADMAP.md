@@ -104,6 +104,18 @@ The app keeps the exact look, feel, and results of v1.1 while shipping as a smal
 
 ---
 
+## Phase 10 - Security Audit, Hardening & v2.1.1 Release
+**Status: Completed**
+
+- ran a structured full-repo source security audit (`0` confirmed vulnerabilities across desktop, mobile PWA, and CI) and integrated all defense-in-depth hardening into **v2.1.1**
+- tightened Tauri capability permissions to `permissions: []` (`src-tauri/capabilities/default.json`) and expanded desktop CSP (`connect-src 'none'`, `object-src 'none'`, `base-uri 'none'`, `form-action 'none'`, `frame-ancestors 'none'`)
+- hardened `history.json` storage in `src-tauri/src/commands.rs`: symlink checks, `1 MiB` bounded read, shared schema validation on disk load matching `history_add`, unique `history.<pid>.<seq>.json.tmp` atomic writes (`0o600` file / `0o700` dir on Unix + `sync_all()`), lock-held commit-on-success mutations, and `4096`-byte `copy_text` cap
+- hardened `mobile/index.html` and `mobile/sw.js` with `<meta http-equiv="Content-Security-Policy">` pinning exact SHA-256 digests of inline `<style>` and `<script>`, `<meta name="referrer" content="no-referrer">`, schema-validated `localStorage` with `256`-char field bounds and cross-tab `storage` sync, `Object.hasOwn` guards, `.clipboard-scratch` class replacing inline styles, and scope-pathname + non-redirect SW caching checks
+- hardened CI/CD (`.github/workflows/build.yml`, `.github/workflows/pages.yml`, `.gitattributes`): immutable 40-char Action SHAs, `persist-credentials: false`, `--locked` builds, `contents: read` vs `main`/tag-only `release` split, Pages `refs/heads/main` guard, `SHA256SUMS.txt` checksums, and LF line-ending preservation
+- surfaced the live Web App URL (`https://ciphervaults.github.io/Percentage-Calculator-Tool/`) visibly across `README.md`, GitHub repository metadata, desktop & mobile About modals, and `file://` install notes
+
+---
+
 ## Optional Future Work
 
 Future improvements can include:
@@ -113,3 +125,4 @@ Future improvements can include:
 - paid Windows Authenticode code signing (to remove the SmartScreen "unknown publisher" prompt)
 - macOS and Linux release bundles in the GitHub Actions matrix
 - auto-update support
+- GitHub Repository Settings hardening (enforce SHA-only Actions allowlist in `Settings -> Actions -> General` and `main`-only deployment rule on the `github-pages` environment)

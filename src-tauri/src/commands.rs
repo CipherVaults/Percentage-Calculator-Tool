@@ -121,6 +121,7 @@ fn read_regular_file_limited(path: &Path, max_bytes: usize) -> Result<Vec<u8>, S
 }
 
 fn ensure_private_parent_dir(parent: &Path) -> Result<(), String> {
+    #[cfg(unix)]
     let created = !parent.exists();
     std::fs::create_dir_all(parent)
         .map_err(|err| format!("failed to create app data directory: {err}"))?;

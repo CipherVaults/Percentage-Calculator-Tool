@@ -1,4 +1,4 @@
-# Development Handoff — Percentage Calculator Tool (`v2.1.1`)
+# Development Handoff — Percentage Calculator Tool (`v2.2.0`)
 
 This document captures everything required to transition development cleanly from **Antigravity Remote Agents** to a **local Antigravity Desktop installation on Windows** with local Git, GitHub CLI (`gh`), Rust/Tauri builds, and automated verification.
 
@@ -8,13 +8,14 @@ This document captures everything required to transition development cleanly fro
 
 - **Repository:** [`CipherVaults/Percentage-Calculator-Tool`](https://github.com/CipherVaults/Percentage-Calculator-Tool) (`https://github.com/CipherVaults/Percentage-Calculator-Tool.git`)
 - **Live Mobile & Web PWA (GitHub Pages):** `https://ciphervaults.github.io/Percentage-Calculator-Tool/`
-- **Latest Production Release on `main`:** `v2.1.1` (tag `v2.1.1` → `ccd6ee8ee607b27076f382edb36b5cd589ac9d70`)
+- **Latest Production Release on `main`:** `v2.2.0` (tag `v2.2.0`)
 - **Handoff Development Branch:** `handoff-local-dev` (created cleanly off `main`; **do not force-push** — merge or continue feature branches via normal PR workflow)
 - **Historical Version Tags:**
   - `v1.1.0` / `v1.1.0-electron` — final Electron desktop release
   - `v2.0.0` — initial Tauri v2 + Rust rewrite
   - `v2.1.0` — v2.1 features (swap pills, Markup & Margin, Reverse Tax/VAT, history tape, dark About modal, initial Mobile PWA)
   - `v2.1.1` — security hardening across desktop, mobile, and CI + desktop quick-jump pills + README/assets overhaul
+  - `v2.2.0` — calculator & copy polish (formatted number paste, `Enter` quick-save, `Ctrl/Cmd+Shift+C`, `0%` zero-denominator hints), history tape timestamps/filtering/single-entry delete & restore pulse, and optional GitHub Releases update checker with persistent desktop `settings.json`
 
 ---
 
@@ -34,9 +35,9 @@ The repository contains two offline, zero-telemetry calculator applications back
 |  Tauri Shell (src-tauri/src/main.rs & commands.rs)                      |
 |    - Permissions locked to [] (capabilities/default.json)               |
 |    - Strict CSP + no-referrer (tauri.conf.json & ui/index.html)         |
-|    - 7 calc IPC commands + history CRUD + bounded copy_text (4096 B)    |
-|    - --smoke-test mode (40+ webview & real clipboard checks + 20s timeout)|
-|    - Atomic private history store (%APPDATA%\com.percentagecalculator.tool\history.json)
+|    - 7 calc IPC + history_delete + settings/update + bounded copy_text  |
+|    - --smoke-test mode (50+ webview & real clipboard checks + 20s timeout)|
+|    - Atomic private stores (%APPDATA%\com.percentagecalculator.tool\{history,settings}.json)
 |                             |                                           |
 |                             v                                           |
 |  Pure Rust Math Engine (crates/percent-core/src/lib.rs)                 |
@@ -51,14 +52,14 @@ The repository contains two offline, zero-telemetry calculator applications back
 |    - Single self-contained HTML file with inline CSS, JS & fallback PNG |
 |    - Exact SHA-256 CSP <meta> digests + <meta name="referrer" content="no-referrer">
 |    - 500-entry schema-validated localStorage history + storage event sync
-|    - Offline-first Service Worker (pct-tool-v2.1.1-mobile-1, scope &    |
+|    - Offline-first Service Worker (pct-tool-v2.2.0-mobile-1, scope &    |
 |      !response.redirected guarded) deployed via GitHub Pages on main    |
 +-------------------------------------------------------------------------+
 ```
 
 ---
 
-## 3. Existing Features (`v2.1.1`)
+## 3. Existing Features (`v2.2.0`)
 
 - **Seven Calculators** (shared across Desktop Rust engine & Mobile JS engine):
   1. **Percentage Change** (`calc_change`)
@@ -71,10 +72,10 @@ The repository contains two offline, zero-telemetry calculator applications back
 - **UI & Ergonomics:**
   - **Quick-Jump 8-Pill Navigation Bar** (`change`, `% of total`, `portion`, `discount`, `original`, `markup & margin`, `tax / vat`, `history`) directly below `.header` on both Desktop and Mobile (`#card-change` .. `#historySection`).
   - **`⇅ swap values` pill** between the two inputs on every calculator card.
-  - **Live Formula & Live Result panel** updating while typing (guarded by per-section sequence counters `seq.*` on desktop so out-of-order async replies cannot overwrite newer input).
-  - **Persistent 500-Entry History Tape** (`history_list`, `history_add`, `history_clear`) with consecutive deduplication, `copy`, `↺ restore` back into the source calculator, and confirmation-guarded clear (`clear history`).
+  - **Live Formula & Live Result panel** updating while typing (guarded by per-section sequence counters `seq.*` on desktop so out-of-order async replies cannot overwrite newer input), plus formatted number paste support (`$1,250.50`, `15%`), `Enter` quick-save to history, `Ctrl/Cmd+Shift+C` shortcut with **Copy** button feedback, and `0%` zero-denominator hints.
+  - **Persistent 500-Entry History Tape** (`history_list`, `history_add`, `history_delete`, `history_clear`) with `YYYY-MM-DD HH:MM:SS` timestamps, real-time filtering (`#historyFilter`), consecutive deduplication, `copy`, `↺ restore` back into the source calculator with a `.card-restored` highlight pulse, single-item `×` deletion, and confirmation-guarded clear (`clear history`).
   - **Clear All** resets all calculator inputs without erasing saved history.
-  - **Dark Terminal About Modal** (`Esc` / backdrop / `[ × ]`) with credits (**Mohamed Sayed · Ahmed Emara · DeepSeek · ChatGPT · Antigravity**), runtime version (`get_app_info`), and **Official Web App (PWA)** link/copy button (`https://ciphervaults.github.io/Percentage-Calculator-Tool/`).
+  - **Dark Terminal About Modal & Settings** (`Esc` / backdrop / `[ × ]`) with credits (**Mohamed Sayed · Ahmed Emara · DeepSeek · ChatGPT · Antigravity**), runtime version (`get_app_info`), **Official Web App (PWA)** link/copy button (`https://ciphervaults.github.io/Percentage-Calculator-Tool/`), persistent Desktop **Check for updates on startup** toggle (`settings.json` via `settings_get` / `settings_set`), and manual **Check Now** (`check_for_update` / `open_release_page` on Desktop; GitHub Releases API check on Mobile & Web).
   - **Mobile PWA Features:** notch safe-area padding (`viewport-fit=cover`), `16px` input font sizes to prevent iOS Safari zoom, Home Screen install helper modal, and offline Service Worker caching.
 
 ---
@@ -88,17 +89,17 @@ The repository contains two offline, zero-telemetry calculator applications back
 | `.gitignore` | Ignores `target/`, `src-tauri/gen/`, legacy Node artifacts, `dist/`, logs, `.env*`, `*.pem`, `*.key` |
 | `crates/percent-core/src/lib.rs` | Pure Rust math formulas (`js_round`, `format_decimal`, all 7 calculators) + 9 unit tests |
 | `crates/percent-core/tests/golden_parity.rs` | Verifies 10,661 golden fixtures in `tests/fixtures/golden.json` (generated by `tests/fixtures/generate-golden.mjs`) |
-| `src-tauri/src/main.rs` | Tauri window setup, state (`SmokeState`, `HistoryState`), `--smoke-test` in-memory isolation & 20s watchdog |
-| `src-tauri/src/commands.rs` | All Tauri `#[tauri::command]` handlers, hardened `history.json` I/O, input/entry validation, `copy_text`, and 2 storage tests |
-| `src-tauri/tauri.conf.json` | Window geometry (`1120x860`, min `760x620`), strict desktop CSP, NSIS/MSI bundler configuration (`version: "2.1.1"`) |
+| `src-tauri/src/main.rs` | Tauri window setup, state (`SmokeState`, `HistoryState`, `SettingsState`), `--smoke-test` in-memory isolation & 20s watchdog |
+| `src-tauri/src/commands.rs` | All Tauri `#[tauri::command]` handlers, hardened `history.json` & `settings.json` I/O, input/entry validation, `check_for_update`, `open_release_page`, `copy_text`, and 3 unit tests |
+| `src-tauri/tauri.conf.json` | Window geometry (`1120x860`, min `760x620`), strict desktop CSP, NSIS/MSI bundler configuration (`version: "2.2.0"`) |
 | `src-tauri/capabilities/default.json` | Least-privilege capability list (`permissions: []`) |
 | `ui/index.html`, `ui/styles.css`, `ui/main.js` | Desktop Tauri webview HTML, terminal theme + `.quick-nav` CSS, IPC controller + live `--smoke-test` suite |
 | `mobile/index.html` | Standalone single-file Mobile & Web PWA with inline `<style>`/`<script>` pinned via SHA-256 CSP `<meta>` |
-| `mobile/sw.js` | Offline Service Worker (`pct-tool-v2.1.1-mobile-1`) with scope-prefix & `!response.redirected` guards |
+| `mobile/sw.js` | Offline Service Worker (`pct-tool-v2.2.0-mobile-1`) with scope-prefix & `!response.redirected` guards |
 | `mobile/manifest.webmanifest` & `mobile/icons/` | Web app manifest + Apple Touch (`180x180`) and Android (`192x192`, `512x512`, `maskable`) icons |
 | `.github/workflows/build.yml` | SHA-pinned CI: Ubuntu verification → Windows Clippy/Tests/Tauri Build/Smoke Test/SHA256SUMS → `main`/tag GitHub Release publisher |
 | `.github/workflows/pages.yml` | SHA-pinned GitHub Pages workflow: re-verifies 10k parity + CSP SHA-256 hashes → deploys `mobile/` from `refs/heads/main` only |
-| `.github/release-notes-v2.1.1.md` | Release notes template for tag `v2.1.1` |
+| `.github/release-notes-v2.2.0.md` | Release notes template for tag `v2.2.0` (with `.github/release-notes-v2.1.1.md` retained for history) |
 | `README.md` & `assets/` | Public overview, desktop/mobile previews (`assets/preview-desktop.png`, `assets/preview-mobile.png`), security notes & checksums guide |
 | `Documentation/` | `1- PROJECT_CONTEXT.md`, `2- ARCHITECTURE.md`, `3- ROADMAP.md`, `4- SESSION_SUMMARY.md` |
 | `reference/Percentage Calculator Tool v1.1.html` | Original single-file HTML utility kept read-only for historical reference |
@@ -115,11 +116,12 @@ The repository contains two offline, zero-telemetry calculator applications back
 6. **Hardened Local Persistence (`src-tauri/src/commands.rs`):**
    - `read_regular_file_limited` rejects symlinks/non-files and caps reads at `1 MiB` (`HISTORY_MAX_FILE_BYTES`).
    - `load_history_from_disk` applies shared `validate_entry_fields` checks (`ALLOWED_CALCULATORS`, `MAX_FIELD_LEN = 256`, `mode` allowlist) identical to `history_add`.
-   - `write_atomic_private` checks parent & target symlinks, writes exclusively via `OpenOptions::create_new(true)` (`history.<pid>.<seq>.json.tmp`, Unix `0o600` file / `0o700` dir), calls `sync_all()`, and atomically renames.
-   - `history_add` and `history_clear` hold the mutex across persistence and only commit in-memory state after disk persistence succeeds.
+   - `write_atomic_private` checks parent & target symlinks, writes exclusively via `OpenOptions::create_new(true)` (`<stem>.<pid>.<seq>.tmp`, Unix `0o600` file / `0o700` dir) for both `history.json` and `settings.json`, calls `sync_all()`, and atomically renames.
+   - `history_add`, `history_delete`, `history_clear`, and `settings_set` hold their mutex across persistence and only commit in-memory state after disk persistence succeeds.
    - `copy_text` enforces `MAX_COPY_LEN = 4096`.
+   - `check_for_update` and `open_release_page` enforce strict HTTPS URL validation (`https://github.com/CipherVaults/Percentage-Calculator-Tool/releases...`).
 7. **Hardened Mobile PWA (`mobile/`):**
-   - Strict `<meta http-equiv="Content-Security-Policy">` pinning Base64 SHA-256 digests of the exact `<style>` and `<script>` blocks alongside `default-src 'none'`, `worker-src 'self'`, `img-src 'self' data:`, `manifest-src 'self'`, `connect-src 'self'`, `object-src 'none'`, `base-uri 'none'`, `form-action 'none'`, plus `<meta name="referrer" content="no-referrer">` and zero runtime `element.style.*` writes.
+   - Strict `<meta http-equiv="Content-Security-Policy">` pinning Base64 SHA-256 digests of the exact `<style>` and `<script>` blocks alongside `default-src 'none'`, `worker-src 'self'`, `img-src 'self' data:`, `manifest-src 'self'`, `connect-src 'self' https://api.github.com`, `object-src 'none'`, `base-uri 'none'`, `form-action 'none'`, plus `<meta name="referrer" content="no-referrer">` and zero runtime `element.style.*` writes.
    - `localStorage` parsing validates plain objects, string fields (`<= 256` chars), allowlisted calculator keys via `Object.hasOwn`, and syncs cross-tab clears cleanly via `window.addEventListener("storage", ...)`.
 8. **Hardened CI/CD & Clean Tag Re-Releases (`.github/workflows/`):**
    - All workflow Actions are pinned to immutable 40-char commit SHAs with `persist-credentials: false`.
@@ -129,8 +131,8 @@ The repository contains two offline, zero-telemetry calculator applications back
 
 ## 6. Development Progress
 
-- **Phases 1–10 Completed:** Electron baseline preserved (`v1.1.0-electron`), Tauri v2 + Rust rebuild shipped (`v2.0.0`), Swap/Markup/Reverse Tax/History/Dark About + Mobile PWA shipped (`v2.1.0`), full source security audit (`0` confirmed findings) + defense-in-depth hardening + desktop quick-jump bar parity shipped (`v2.1.1`).
-- **CI Verification on `main` (`ccd6ee8`):** `Rust Core Tests & Web Asset Checks`, `Windows Build, Smoke Test & Bundles`, `Deploy Mobile & Web PWA (GitHub Pages)`, and `Publish GitHub Release` (`v2.1.1`) have all succeeded on `main`.
+- **Phases 1–11 Completed:** Electron baseline preserved (`v1.1.0-electron`), Tauri v2 + Rust rebuild shipped (`v2.0.0`), Swap/Markup/Reverse Tax/History/Dark About + Mobile PWA shipped (`v2.1.0`), full source security audit (`0` confirmed findings) + defense-in-depth hardening + desktop quick-jump bar parity shipped (`v2.1.1`), and calculator/copy polish, history filtering/single-item delete & optional GitHub Releases update checker shipped (`v2.2.0`).
+- **CI Verification on `main` (`v2.2.0`):** `Rust Core Tests & Web Asset Checks`, `Windows Build, Smoke Test & Bundles`, `Deploy Mobile & Web PWA (GitHub Pages)`, and `Publish GitHub Release` (`v2.2.0`) have all succeeded on `main`.
 
 ---
 
@@ -224,8 +226,8 @@ The repository contains two offline, zero-telemetry calculator applications back
    cargo tauri build -- --locked
    ```
    Outputs appear under `target\release\`:
-   - `target\release\bundle\nsis\Percentage Calculator Tool_2.1.1_x64-setup.exe`
-   - `target\release\bundle\msi\Percentage Calculator Tool_2.1.1_x64_en-US.msi`
+   - `target\release\bundle\nsis\Percentage Calculator Tool_2.2.0_x64-setup.exe`
+   - `target\release\bundle\msi\Percentage Calculator Tool_2.2.0_x64_en-US.msi`
    - `target\release\percentage-calculator-tool.exe` (standalone portable)
 5. **Run Real-Window End-to-End Smoke Test:**
    ```powershell
@@ -302,5 +304,5 @@ The following items reside inside the Antigravity Remote VM / cloud session and 
 2. **Pre-Configured Cloud Auth & Proxy:** The remote `agy-plugin-proxy` OAuth credentials (`GH_TOKEN`, injected git identity) are ephemeral to the remote VM. You must run `gh auth login`, `gh auth setup-git`, and set `git config user.name` / `user.email` locally on Windows.
 3. **Ephemeral Linux VM Toolchains & Build Cache:** `/home/antigravity/.local/tauri-env.sh`, Debian `WebKitGTK` headers, `/home/antigravity/build/tauri-cli-install.log`, and Linux `target/` Cargo artifacts stay on the remote Linux VM and must be installed natively on Windows (`rustup`, MSVC Build Tools, WebView2).
 4. **Non-Repo Security Audit Artifacts & Historical Fork Clone:** Intermediate security audit run files (`/home/antigravity/security-audit-skill/...`) and the superseded v2.0.0-era fork clone (`/home/antigravity/AbyssWatcher2/Percentage-Calculator-Tool`, clean at `7f66f93`) live outside the canonical repository; all actionable findings and source changes are committed in `CipherVaults/Percentage-Calculator-Tool`.
-5. **Per-Device App Runtime Data:** Existing saved desktop history (`%APPDATA%\com.percentagecalculator.tool\history.json`) and browser `localStorage` / installed PWA caches live per device and are not synced.
+5. **Per-Device App Runtime Data:** Existing saved desktop history/settings (`%APPDATA%\com.percentagecalculator.tool\{history,settings}.json`) and browser `localStorage` / installed PWA caches live per device and are not synced.
 6. **GitHub Web UI Settings Verification:** Confirm `Settings → Environments → github-pages` (`main`-only deployment rule) and `Settings → Actions → General` directly in your browser on GitHub.

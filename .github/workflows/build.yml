@@ -186,13 +186,17 @@ jobs:
           )
           test "${#ASSETS[@]}" -ge 5
 
+          NOTES_FILE=".github/release-notes-${TAG}.md"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists; updating assets and SHA256SUMS.txt."
+            echo "Release $TAG already exists; moving tag $TAG to $GITHUB_SHA and updating assets, release notes, and SHA256SUMS.txt."
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/${TAG}" -f "sha=${GITHUB_SHA}" -F force=true
             gh release upload "$TAG" "${ASSETS[@]}" --clobber
+            if [[ -f "$NOTES_FILE" ]]; then
+              gh release edit "$TAG" --notes-file "$NOTES_FILE"
+            fi
             exit 0
           fi
 
-          NOTES_FILE=".github/release-notes-${TAG}.md"
           if [[ -f "$NOTES_FILE" ]]; then
             gh release create "$TAG" "${ASSETS[@]}" \
               --target "$GITHUB_SHA" \

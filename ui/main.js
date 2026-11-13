@@ -1212,6 +1212,21 @@ async function runSmokeTestIfRequested() {
         .textContent.includes("Desktop v2.1.1")
     );
 
+    const quickLinks = Array.from(document.querySelectorAll(".quick-nav .quick-link"));
+    check(
+      "quick-nav-links",
+      quickLinks.length === 8 &&
+        quickLinks.every((link) => {
+          const targetId = link.getAttribute("href")?.replace(/^#/, "");
+          return Boolean(targetId && document.getElementById(targetId));
+        })
+    );
+    const taxNavLink = quickLinks.find((link) => link.getAttribute("href") === "#card-tax");
+    taxNavLink?.click();
+    check("quick-nav-hash", window.location.hash === "#card-tax");
+    window.history.replaceState(null, "", window.location.pathname);
+    window.scrollTo(0, 0);
+
     await setInput("changeOrig", "150", updateChangeLive);
     await setInput("changeNew", "180", updateChangeLive);
     check(

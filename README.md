@@ -88,6 +88,7 @@ Seven calculator sections across Desktop and Mobile:
 
 Polish across Desktop & Mobile:
 
+- **quick-jump navigation bar** (`change`, `% of total`, `portion`, `discount`, `original`, `markup & margin`, `tax / vat`, `history`) right below the header for instant section scrolling
 - **`⇅ swap values` pill** between the two inputs on every calculator card
 - **persistent local history tape** (up to 500 entries, newest first, with one-click `copy`, `↺ restore` back into the calculator, and `clear history`)
 - live calculation while typing (computed in Rust via Tauri IPC on desktop, matching JS engine in Mobile HTML across all 10,661 golden test cases)

@@ -7,8 +7,12 @@
 const COPY_FEEDBACK_MS = 1200;
 const MAX_FIELD_LEN = 256;
 const WEB_APP_URL = "https://ciphervaults.github.io/Percentage-Calculator-Tool/";
+const RELEASE_URL =
+  "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/latest";
 let historyLimit = 500;
 let taxMode = "add";
+let allHistoryEntries = [];
+let historyFilterValue = "all";
 
 function invoke(cmd, args) {
   const fn =
@@ -43,18 +47,76 @@ const lastValidCalc = {
   tax: null
 };
 
+const CALC_INPUT_IDS = [
+  "changeOrig",
+  "changeNew",
+  "isWhatX",
+  "isWhatY",
+  "whatX",
+  "whatY",
+  "discountPrice",
+  "discountPercent",
+  "baseX",
+  "baseY",
+  "markupCost",
+  "markupPrice",
+  "taxAmount",
+  "taxRate"
+];
+
+function sanitizeNumericString(raw) {
+  if (typeof raw !== "string") return "";
+  const trimmed = raw.trim();
+  if (!trimmed) return "";
+  let cleaned = trimmed.replace(/[\s_,$€£¥₹₩₽₺₫₪₱฿%]+/g, "");
+  cleaned = cleaned.replace(
+    /^(?:USD|EUR|GBP|JPY|CAD|AUD|CHF|INR)(?=[-+]?\d|\.)/i,
+    ""
+  );
+  if (cleaned.startsWith("+")) {
+    cleaned = cleaned.slice(1);
+  }
+  return cleaned;
+}
+
+function fmtFormulaNum(n) {
+  if (typeof n !== "number" || !Number.isFinite(n)) return String(n);
+  if (n === 0) return "0";
+  return n < 0 ? `(${n})` : String(n);
+}
+
 function getNumber(id) {
   const el = document.getElementById(id);
   if (!el) return null;
-  const val = el.value.trim();
-  if (val === "") return null;
-  const num = parseFloat(val);
+  const cleaned = sanitizeNumericString(el.value);
+  if (cleaned === "") return null;
+  const num = Number(cleaned);
   return Number.isNaN(num) ? null : num;
 }
 
 function getRawInput(id) {
   const el = document.getElementById(id);
-  return el ? el.value.trim() : "";
+  return el ? sanitizeNumericString(el.value) : "";
+}
+
+function attachPasteSanitizers() {
+  const plainNumberRe = /^-?\d*\.?\d+(?:[eE][-+]?\d+)?$/;
+  CALC_INPUT_IDS.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("paste", (event) => {
+      const rawText = event.clipboardData?.getData("text");
+      if (typeof rawText !== "string") return;
+      const trimmed = rawText.trim();
+      if (!trimmed || plainNumberRe.test(trimmed)) return;
+      const cleaned = sanitizeNumericString(trimmed);
+      if (cleaned !== "" && !Number.isNaN(Number(cleaned))) {
+        event.preventDefault();
+        el.value = cleaned;
+        el.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    });
+  });
 }
 
 function buildValidHistoryCandidate(candidate) {
@@ -134,17 +196,30 @@ function showCopyFeedback(button) {
 }
 
 async function copyText(text, button) {
+  if (typeof text !== "string" || text.trim() === "") return false;
   try {
     await invoke("copy_text", { text });
     showCopyFeedback(button);
+    return true;
   } catch {
     try {
       await navigator.clipboard.writeText(text);
       showCopyFeedback(button);
+      return true;
     } catch {
       // Clipboard failures should not interrupt the calculator.
+      return false;
     }
   }
+}
+
+async function copyCardResult(key, button) {
+  const calc = lastValidCalc[key];
+  if (!calc || !calc.copyText) return false;
+  const copied = await copyText(calc.copyText, button);
+  if (!copied) return false;
+  await recordHistoryFor(key);
+  return true;
 }
 
 function swapFields(aId, bId, updateFn) {
@@ -166,18 +241,53 @@ function attachEnterKey(ids, computeAndRecordFn) {
   });
 }
 
+function fmtFormulaText(text) {
+  const trimmed = String(text ?? "").trim();
+  return trimmed.startsWith("-") ? `(${trimmed})` : trimmed;
+}
+
+function setCardOutOfRange(
+  key,
+  formulaDiv,
+  resultSpan,
+  resultId,
+  defaultFormula
+) {
+  lastValidCalc[key] = null;
+  if (Array.isArray(defaultFormula)) {
+    setLines(formulaDiv, defaultFormula);
+  } else {
+    formulaDiv.textContent = defaultFormula;
+  }
+  resultSpan.textContent = "→ invalid";
+  setResult(resultId, "Value out of range", true);
+}
+
+function allFiniteValues(obj, keys) {
+  return (
+    Boolean(obj) &&
+    keys.every((k) => typeof obj[k] === "number" && Number.isFinite(obj[k]))
+  );
+}
+
 async function updateChangeLive() {
   const ticket = ++seq.change;
   const orig = getNumber("changeOrig");
   const newVal = getNumber("changeNew");
   const formulaDiv = document.getElementById("changeLiveFormula");
   const resultSpan = document.getElementById("changeLiveResult");
+  const defaultFormula = "((new − original) / original) × 100";
 
   if (orig === null || newVal === null) {
     lastValidCalc.change = null;
-    formulaDiv.textContent = "((new − original) / original) × 100";
+    formulaDiv.textContent = defaultFormula;
     resultSpan.textContent = "→ —";
     setResult("changeResult", "—");
+    return;
+  }
+
+  if (!Number.isFinite(orig) || !Number.isFinite(newVal)) {
+    setCardOutOfRange("change", formulaDiv, resultSpan, "changeResult", defaultFormula);
     return;
   }
 
@@ -190,17 +300,18 @@ async function updateChangeLive() {
 
     if (result.ok === "false") {
       lastValidCalc.change = null;
-      setFormulaError(
-        formulaDiv,
-        "((new − original) / original) × 100",
-        "(original cannot be zero)"
-      );
+      setFormulaError(formulaDiv, defaultFormula, "(original cannot be zero)");
       resultSpan.textContent = "→ invalid";
       setResult("changeResult", result.error, true);
       return;
     }
 
-    formulaDiv.textContent = `((${newVal} − ${orig}) / ${orig}) × 100`;
+    if (!allFiniteValues(result, ["value"])) {
+      setCardOutOfRange("change", formulaDiv, resultSpan, "changeResult", defaultFormula);
+      return;
+    }
+
+    formulaDiv.textContent = `((${fmtFormulaNum(newVal)} − ${fmtFormulaNum(orig)}) / ${fmtFormulaNum(orig)}) × 100`;
     resultSpan.textContent = `→ ${result.liveResult}`;
     setResult("changeResult", result.label);
 
@@ -216,10 +327,7 @@ async function updateChangeLive() {
     });
   } catch {
     if (ticket !== seq.change) return;
-    lastValidCalc.change = null;
-    formulaDiv.textContent = "((new − original) / original) × 100";
-    resultSpan.textContent = "→ invalid";
-    setResult("changeResult", "Value out of range", true);
+    setCardOutOfRange("change", formulaDiv, resultSpan, "changeResult", defaultFormula);
   }
 }
 
@@ -229,12 +337,18 @@ async function updatePercentLive() {
   const y = getNumber("isWhatY");
   const formulaDiv = document.getElementById("percentLiveFormula");
   const resultSpan = document.getElementById("percentLiveResult");
+  const defaultFormula = "(X / Y) × 100";
 
   if (x === null || y === null) {
     lastValidCalc.percent = null;
-    formulaDiv.textContent = "(X / Y) × 100";
+    formulaDiv.textContent = defaultFormula;
     resultSpan.textContent = "→ —";
     setResult("percentResult", "—");
+    return;
+  }
+
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    setCardOutOfRange("percent", formulaDiv, resultSpan, "percentResult", defaultFormula);
     return;
   }
 
@@ -244,13 +358,18 @@ async function updatePercentLive() {
 
     if (result.ok === "false") {
       lastValidCalc.percent = null;
-      setFormulaError(formulaDiv, "(X / Y) × 100", "(Y cannot be zero)");
+      setFormulaError(formulaDiv, defaultFormula, "(Y cannot be zero)");
       resultSpan.textContent = "→ invalid";
       setResult("percentResult", result.error, true);
       return;
     }
 
-    formulaDiv.textContent = `(${x} / ${y}) × 100`;
+    if (!allFiniteValues(result, ["value"])) {
+      setCardOutOfRange("percent", formulaDiv, resultSpan, "percentResult", defaultFormula);
+      return;
+    }
+
+    formulaDiv.textContent = `(${fmtFormulaNum(x)} / ${fmtFormulaNum(y)}) × 100`;
     resultSpan.textContent = `→ ${result.label}`;
     setResult("percentResult", result.label);
 
@@ -266,10 +385,7 @@ async function updatePercentLive() {
     });
   } catch {
     if (ticket !== seq.percent) return;
-    lastValidCalc.percent = null;
-    formulaDiv.textContent = "(X / Y) × 100";
-    resultSpan.textContent = "→ invalid";
-    setResult("percentResult", "Value out of range", true);
+    setCardOutOfRange("percent", formulaDiv, resultSpan, "percentResult", defaultFormula);
   }
 }
 
@@ -279,12 +395,18 @@ async function updateWhatLive() {
   const y = getNumber("whatY");
   const formulaDiv = document.getElementById("whatLiveFormula");
   const resultSpan = document.getElementById("whatLiveResult");
+  const defaultFormula = "(X / 100) × Y";
 
   if (x === null || y === null) {
     lastValidCalc.what = null;
-    formulaDiv.textContent = "(X / 100) × Y";
+    formulaDiv.textContent = defaultFormula;
     resultSpan.textContent = "→ —";
     setResult("whatResult", "—");
+    return;
+  }
+
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    setCardOutOfRange("what", formulaDiv, resultSpan, "whatResult", defaultFormula);
     return;
   }
 
@@ -292,7 +414,12 @@ async function updateWhatLive() {
     const result = await invoke("calc_portion", { percent: x, number: y });
     if (ticket !== seq.what) return;
 
-    formulaDiv.textContent = `(${x} / 100) × ${y}`;
+    if (!allFiniteValues(result, ["value"])) {
+      setCardOutOfRange("what", formulaDiv, resultSpan, "whatResult", defaultFormula);
+      return;
+    }
+
+    formulaDiv.textContent = `(${fmtFormulaNum(x)} / 100) × ${fmtFormulaNum(y)}`;
     resultSpan.textContent = `→ ${result.label}`;
     setResult("whatResult", result.label);
 
@@ -308,10 +435,7 @@ async function updateWhatLive() {
     });
   } catch {
     if (ticket !== seq.what) return;
-    lastValidCalc.what = null;
-    formulaDiv.textContent = "(X / 100) × Y";
-    resultSpan.textContent = "→ invalid";
-    setResult("whatResult", "Value out of range", true);
+    setCardOutOfRange("what", formulaDiv, resultSpan, "whatResult", defaultFormula);
   }
 }
 
@@ -321,15 +445,21 @@ async function updateDiscountLive() {
   const disc = getNumber("discountPercent");
   const formulaDiv = document.getElementById("discountLiveFormula");
   const resultSpan = document.getElementById("discountLiveResult");
+  const defaultLines = [
+    "final = price × (1 − discount/100)",
+    "saved = price × discount/100"
+  ];
 
   if (price === null || disc === null) {
     lastValidCalc.discount = null;
-    setLines(formulaDiv, [
-      "final = price × (1 − discount/100)",
-      "saved = price × discount/100"
-    ]);
+    setLines(formulaDiv, defaultLines);
     resultSpan.textContent = "→ —";
     setResult("discountResult", "—");
+    return;
+  }
+
+  if (!Number.isFinite(price) || !Number.isFinite(disc)) {
+    setCardOutOfRange("discount", formulaDiv, resultSpan, "discountResult", defaultLines);
     return;
   }
 
@@ -340,9 +470,14 @@ async function updateDiscountLive() {
     });
     if (ticket !== seq.discount) return;
 
+    if (!allFiniteValues(result, ["finalPrice", "saved"])) {
+      setCardOutOfRange("discount", formulaDiv, resultSpan, "discountResult", defaultLines);
+      return;
+    }
+
     setLines(formulaDiv, [
-      `final = ${price} × (1 − ${disc}/100) = ${result.finalText}`,
-      `saved = ${price} × ${disc}/100 = ${result.savedText}`
+      `final = ${fmtFormulaNum(price)} × (1 − ${fmtFormulaNum(disc)}/100) = ${result.finalText}`,
+      `saved = ${fmtFormulaNum(price)} × ${fmtFormulaNum(disc)}/100 = ${result.savedText}`
     ]);
     resultSpan.textContent = `→ final: ${result.finalText} | saved: ${result.savedText}`;
     setResult("discountResult", result.label);
@@ -359,13 +494,7 @@ async function updateDiscountLive() {
     });
   } catch {
     if (ticket !== seq.discount) return;
-    lastValidCalc.discount = null;
-    setLines(formulaDiv, [
-      "final = price × (1 − discount/100)",
-      "saved = price × discount/100"
-    ]);
-    resultSpan.textContent = "→ invalid";
-    setResult("discountResult", "Value out of range", true);
+    setCardOutOfRange("discount", formulaDiv, resultSpan, "discountResult", defaultLines);
   }
 }
 
@@ -375,12 +504,18 @@ async function updateBaseLive() {
   const y = getNumber("baseY");
   const formulaDiv = document.getElementById("baseLiveFormula");
   const resultSpan = document.getElementById("baseLiveResult");
+  const defaultFormula = "X / (Y / 100)";
 
   if (x === null || y === null) {
     lastValidCalc.base = null;
-    formulaDiv.textContent = "X / (Y / 100)";
+    formulaDiv.textContent = defaultFormula;
     resultSpan.textContent = "→ —";
     setResult("baseResult", "—");
+    return;
+  }
+
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    setCardOutOfRange("base", formulaDiv, resultSpan, "baseResult", defaultFormula);
     return;
   }
 
@@ -390,13 +525,18 @@ async function updateBaseLive() {
 
     if (result.ok === "false") {
       lastValidCalc.base = null;
-      setFormulaError(formulaDiv, "X / (Y / 100)", "(Y cannot be zero)");
+      setFormulaError(formulaDiv, defaultFormula, "(Y cannot be zero)");
       resultSpan.textContent = "→ invalid";
       setResult("baseResult", result.error, true);
       return;
     }
 
-    formulaDiv.textContent = `${x} / (${y} / 100)`;
+    if (!allFiniteValues(result, ["value"])) {
+      setCardOutOfRange("base", formulaDiv, resultSpan, "baseResult", defaultFormula);
+      return;
+    }
+
+    formulaDiv.textContent = `${fmtFormulaNum(x)} / (${fmtFormulaNum(y)} / 100)`;
     resultSpan.textContent = `→ ${result.label}`;
     setResult("baseResult", result.label);
 
@@ -412,10 +552,7 @@ async function updateBaseLive() {
     });
   } catch {
     if (ticket !== seq.base) return;
-    lastValidCalc.base = null;
-    formulaDiv.textContent = "X / (Y / 100)";
-    resultSpan.textContent = "→ invalid";
-    setResult("baseResult", "Value out of range", true);
+    setCardOutOfRange("base", formulaDiv, resultSpan, "baseResult", defaultFormula);
   }
 }
 
@@ -425,16 +562,22 @@ async function updateMarkupLive() {
   const price = getNumber("markupPrice");
   const formulaDiv = document.getElementById("markupLiveFormula");
   const resultSpan = document.getElementById("markupLiveResult");
+  const defaultLines = [
+    "profit = price − cost",
+    "markup = (profit / cost) × 100",
+    "margin = (profit / price) × 100"
+  ];
 
   if (cost === null || price === null) {
     lastValidCalc.markup = null;
-    setLines(formulaDiv, [
-      "profit = price − cost",
-      "markup = (profit / cost) × 100",
-      "margin = (profit / price) × 100"
-    ]);
+    setLines(formulaDiv, defaultLines);
     resultSpan.textContent = "→ —";
     setResult("markupResult", "—");
+    return;
+  }
+
+  if (!Number.isFinite(cost) || !Number.isFinite(price)) {
+    setCardOutOfRange("markup", formulaDiv, resultSpan, "markupResult", defaultLines);
     return;
   }
 
@@ -457,10 +600,15 @@ async function updateMarkupLive() {
       return;
     }
 
+    if (!allFiniteValues(result, ["profit", "markup", "margin"])) {
+      setCardOutOfRange("markup", formulaDiv, resultSpan, "markupResult", defaultLines);
+      return;
+    }
+
     setLines(formulaDiv, [
-      `profit = ${price} − ${cost} = ${result.profitText}`,
-      `markup = (${result.profitText} / ${cost}) × 100 = ${result.markupText}`,
-      `margin = (${result.profitText} / ${price}) × 100 = ${result.marginText}`
+      `profit = ${fmtFormulaNum(price)} − ${fmtFormulaNum(cost)} = ${result.profitText}`,
+      `markup = (${fmtFormulaText(result.profitText)} / ${fmtFormulaNum(cost)}) × 100 = ${result.markupText}`,
+      `margin = (${fmtFormulaText(result.profitText)} / ${fmtFormulaNum(price)}) × 100 = ${result.marginText}`
     ]);
     resultSpan.textContent = `→ ${result.liveResult}`;
     setResult("markupResult", result.label);
@@ -477,14 +625,7 @@ async function updateMarkupLive() {
     });
   } catch {
     if (ticket !== seq.markup) return;
-    lastValidCalc.markup = null;
-    setLines(formulaDiv, [
-      "profit = price − cost",
-      "markup = (profit / cost) × 100",
-      "margin = (profit / price) × 100"
-    ]);
-    resultSpan.textContent = "→ invalid";
-    setResult("markupResult", "Value out of range", true);
+    setCardOutOfRange("markup", formulaDiv, resultSpan, "markupResult", defaultLines);
   }
 }
 
@@ -520,22 +661,21 @@ async function updateTaxLive() {
   const mode = taxMode;
   const formulaDiv = document.getElementById("taxLiveFormula");
   const resultSpan = document.getElementById("taxLiveResult");
+  const defaultLines =
+    mode === "extract"
+      ? ["net = total / (1 + rate/100)", "tax = total − net"]
+      : ["tax = net × (rate / 100)", "total = net + tax"];
 
   if (amount === null || rate === null) {
     lastValidCalc.tax = null;
-    if (mode === "extract") {
-      setLines(formulaDiv, [
-        "net = total / (1 + rate/100)",
-        "tax = total − net"
-      ]);
-    } else {
-      setLines(formulaDiv, [
-        "tax = net × (rate / 100)",
-        "total = net + tax"
-      ]);
-    }
+    setLines(formulaDiv, defaultLines);
     resultSpan.textContent = "→ —";
     setResult("taxResult", "—");
+    return;
+  }
+
+  if (!Number.isFinite(amount) || !Number.isFinite(rate)) {
+    setCardOutOfRange("tax", formulaDiv, resultSpan, "taxResult", defaultLines);
     return;
   }
 
@@ -559,15 +699,20 @@ async function updateTaxLive() {
       return;
     }
 
+    if (!allFiniteValues(result, ["net", "tax", "total"])) {
+      setCardOutOfRange("tax", formulaDiv, resultSpan, "taxResult", defaultLines);
+      return;
+    }
+
     if (mode === "extract") {
       setLines(formulaDiv, [
-        `net = ${amount} / (1 + ${rate}/100) = ${result.netText}`,
-        `tax = ${amount} − ${result.netText} = ${result.taxText}`
+        `net = ${fmtFormulaNum(amount)} / (1 + ${fmtFormulaNum(rate)}/100) = ${result.netText}`,
+        `tax = ${fmtFormulaNum(amount)} − ${fmtFormulaText(result.netText)} = ${result.taxText}`
       ]);
     } else {
       setLines(formulaDiv, [
-        `tax = ${amount} × (${rate} / 100) = ${result.taxText}`,
-        `total = ${amount} + ${result.taxText} = ${result.totalText}`
+        `tax = ${fmtFormulaNum(amount)} × (${fmtFormulaNum(rate)} / 100) = ${result.taxText}`,
+        `total = ${fmtFormulaNum(amount)} + ${fmtFormulaText(result.taxText)} = ${result.totalText}`
       ]);
     }
     resultSpan.textContent = `→ ${result.liveResult}`;
@@ -591,44 +736,67 @@ async function updateTaxLive() {
     });
   } catch {
     if (ticket !== seq.tax) return;
-    lastValidCalc.tax = null;
-    if (mode === "extract") {
-      setLines(formulaDiv, [
-        "net = total / (1 + rate/100)",
-        "tax = total − net"
-      ]);
-    } else {
-      setLines(formulaDiv, [
-        "tax = net × (rate / 100)",
-        "total = net + tax"
-      ]);
-    }
-    resultSpan.textContent = "→ invalid";
-    setResult("taxResult", "Value out of range", true);
+    setCardOutOfRange("tax", formulaDiv, resultSpan, "taxResult", defaultLines);
   }
 }
 
 function formatHistoryTime(timestampMs) {
-  if (!timestampMs) return "--:--:--";
+  if (!timestampMs) return "---- --:--:--";
   const date = new Date(timestampMs);
-  if (Number.isNaN(date.getTime())) return "--:--:--";
+  if (Number.isNaN(date.getTime())) return "---- --:--:--";
   const pad = (n) => String(n).padStart(2, "0");
-  return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hh = pad(date.getHours());
+  const mm = pad(date.getMinutes());
+  const ss = pad(date.getSeconds());
+  return `${year}-${month}-${day} ${hh}:${mm}:${ss}`;
+}
+
+function flashRestoredCard(cardId) {
+  const cardEl = document.getElementById(cardId);
+  if (!cardEl) return;
+  cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+  cardEl.classList.remove("card-restored");
+  void cardEl.offsetWidth;
+  cardEl.classList.add("card-restored");
+  window.clearTimeout(Number(cardEl.dataset.restoreTimer || 0));
+  const timer = window.setTimeout(() => {
+    cardEl.classList.remove("card-restored");
+  }, 900);
+  cardEl.dataset.restoreTimer = String(timer);
 }
 
 async function restoreHistoryEntry(entry) {
   const map = {
-    change: { a: "changeOrig", b: "changeNew", fn: updateChangeLive },
-    percent: { a: "isWhatX", b: "isWhatY", fn: updatePercentLive },
-    what: { a: "whatX", b: "whatY", fn: updateWhatLive },
+    change: {
+      card: "card-change",
+      a: "changeOrig",
+      b: "changeNew",
+      fn: updateChangeLive
+    },
+    percent: {
+      card: "card-percent",
+      a: "isWhatX",
+      b: "isWhatY",
+      fn: updatePercentLive
+    },
+    what: { card: "card-what", a: "whatX", b: "whatY", fn: updateWhatLive },
     discount: {
+      card: "card-discount",
       a: "discountPrice",
       b: "discountPercent",
       fn: updateDiscountLive
     },
-    base: { a: "baseX", b: "baseY", fn: updateBaseLive },
-    markup: { a: "markupCost", b: "markupPrice", fn: updateMarkupLive },
-    tax: { a: "taxAmount", b: "taxRate", fn: updateTaxLive }
+    base: { card: "card-base", a: "baseX", b: "baseY", fn: updateBaseLive },
+    markup: {
+      card: "card-markup",
+      a: "markupCost",
+      b: "markupPrice",
+      fn: updateMarkupLive
+    },
+    tax: { card: "card-tax", a: "taxAmount", b: "taxRate", fn: updateTaxLive }
   };
 
   if (!entry || !Object.hasOwn(map, entry.calculator)) return;
@@ -645,7 +813,8 @@ async function restoreHistoryEntry(entry) {
   elA.value = entry.inputA;
   elB.value = entry.inputB;
   await target.fn();
-  elA.focus();
+  flashRestoredCard(target.card);
+  elA.focus({ preventScroll: true });
 }
 
 function renderHistory(entries) {
@@ -653,20 +822,36 @@ function renderHistory(entries) {
   const listEl = document.getElementById("historyList");
   if (!countEl || !listEl) return;
 
-  const list = Array.isArray(entries) ? entries : [];
-  countEl.textContent = `(${list.length} / ${historyLimit})`;
+  if (Array.isArray(entries)) {
+    allHistoryEntries = entries;
+  }
+
+  countEl.textContent = `(${allHistoryEntries.length} / ${historyLimit})`;
   listEl.replaceChildren();
 
-  if (list.length === 0) {
+  const filterEl = document.getElementById("historyFilter");
+  if (filterEl) {
+    historyFilterValue = filterEl.value || "all";
+  }
+  const visibleList =
+    historyFilterValue === "all"
+      ? allHistoryEntries
+      : allHistoryEntries.filter(
+          (entry) => entry.calculator === historyFilterValue
+        );
+
+  if (visibleList.length === 0) {
     const emptyDiv = document.createElement("div");
     emptyDiv.className = "history-empty";
     emptyDiv.textContent =
-      "No calculations recorded yet. Press calculate, Enter, or copy on any card to save to history.";
+      allHistoryEntries.length === 0
+        ? "No calculations recorded yet. Press calculate, Enter, or copy on any card to save to history."
+        : "No matching calculations for this filter.";
     listEl.appendChild(emptyDiv);
     return;
   }
 
-  list.forEach((entry) => {
+  visibleList.forEach((entry) => {
     const item = document.createElement("div");
     item.className = "history-item";
 
@@ -714,10 +899,29 @@ function renderHistory(entries) {
       restoreHistoryEntry(entry);
     });
 
-    actions.append(copyBtn, restoreBtn);
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "reset-btn history-delete-btn";
+    deleteBtn.type = "button";
+    deleteBtn.textContent = "×";
+    deleteBtn.title = "Delete history entry";
+    deleteBtn.setAttribute("aria-label", "Delete history entry");
+    deleteBtn.addEventListener("click", () => {
+      deleteHistoryEntry(entry.id);
+    });
+
+    actions.append(copyBtn, restoreBtn, deleteBtn);
     item.append(main, actions);
     listEl.appendChild(item);
   });
+}
+
+async function deleteHistoryEntry(id) {
+  try {
+    const updated = await invoke("history_delete", { id });
+    renderHistory(updated);
+  } catch {
+    // History delete errors should not interrupt calculator usage.
+  }
 }
 
 async function recordHistoryFor(key) {
@@ -816,10 +1020,131 @@ async function syncAppInfo() {
   }
 }
 
+let currentSettings = { checkUpdatesOnStartup: true };
+let latestReleaseUrl = RELEASE_URL;
+
+function openSettingsModal() {
+  const modal = document.getElementById("settingsModal");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+  document.getElementById("closeSettingsBtn")?.focus();
+}
+
+function closeSettingsModal() {
+  const modal = document.getElementById("settingsModal");
+  if (!modal) return;
+  modal.classList.add("hidden");
+  document.getElementById("settingsBtn")?.focus();
+}
+
+function setUpdateStatus(text, isError = false) {
+  const statusEl = document.getElementById("updateStatusText");
+  if (!statusEl) return;
+  statusEl.textContent = text;
+  statusEl.classList.toggle("is-error", isError);
+}
+
+function showUpdateBanner(latestVersion, releaseUrl) {
+  const banner = document.getElementById("updateBanner");
+  const textEl = document.getElementById("updateBannerText");
+  if (!banner || !textEl) return;
+  latestReleaseUrl = releaseUrl || RELEASE_URL;
+  textEl.textContent = `Update available: v${latestVersion} is now released on GitHub.`;
+  banner.classList.remove("hidden");
+}
+
+function hideUpdateBanner() {
+  const banner = document.getElementById("updateBanner");
+  if (!banner) return;
+  banner.classList.add("hidden");
+}
+
+function applyUpdateResult(result, showNoUpdateMessage = true) {
+  if (!result) return;
+  if (result.releaseUrl) {
+    latestReleaseUrl = result.releaseUrl;
+  }
+
+  if (!result.ok) {
+    if (showNoUpdateMessage) {
+      setUpdateStatus(
+        result.error || "Unable to reach GitHub Releases right now.",
+        true
+      );
+    }
+    return;
+  }
+
+  if (result.updateAvailable && result.latestVersion) {
+    showUpdateBanner(result.latestVersion, result.releaseUrl);
+    setUpdateStatus(
+      `New version available: v${result.latestVersion} (current: v${result.currentVersion}).`,
+      false
+    );
+  } else {
+    hideUpdateBanner();
+    if (showNoUpdateMessage) {
+      const tag = result.latestVersion || result.currentVersion;
+      setUpdateStatus(`Up to date — running Desktop v${tag}.`, false);
+    }
+  }
+}
+
+async function runUpdateCheck(manual = false) {
+  const checkBtn = document.getElementById("checkUpdatesNowBtn");
+  if (checkBtn) checkBtn.disabled = true;
+  if (manual) {
+    setUpdateStatus("Checking GitHub Releases for updates...", false);
+  }
+  try {
+    const result = await invoke("check_for_updates");
+    applyUpdateResult(result, manual || result?.updateAvailable);
+    return result;
+  } catch (err) {
+    if (manual) {
+      setUpdateStatus(String(err || "Update check failed."), true);
+    }
+    return null;
+  } finally {
+    if (checkBtn) checkBtn.disabled = false;
+  }
+}
+
+async function openReleasePage() {
+  try {
+    await invoke("open_release_page");
+  } catch {
+    // Opening external URLs may fail in restricted environments.
+  }
+}
+
+async function loadSettingsAndMaybeCheckUpdates(isSmokeMode = false) {
+  try {
+    const loaded = await invoke("get_settings");
+    if (loaded && typeof loaded.checkUpdatesOnStartup === "boolean") {
+      currentSettings = loaded;
+    }
+  } catch {
+    currentSettings = { checkUpdatesOnStartup: true };
+  }
+
+  const toggle = document.getElementById("autoUpdateToggle");
+  if (toggle) {
+    toggle.checked = Boolean(currentSettings.checkUpdatesOnStartup);
+  }
+
+  if (currentSettings.checkUpdatesOnStartup && !isSmokeMode) {
+    runUpdateCheck(false);
+  }
+}
+
 function bindControls() {
   document
     .getElementById("clearAllBtn")
     .addEventListener("click", clearAllCalculators);
+  document
+    .getElementById("settingsBtn")
+    ?.addEventListener("click", openSettingsModal);
   document
     .getElementById("aboutBtn")
     .addEventListener("click", openAboutModal);
@@ -840,11 +1165,65 @@ function bindControls() {
     .addEventListener("click", (event) => {
       if (event.target.id === "aboutModal") closeAboutModal();
     });
+
+  document
+    .getElementById("closeSettingsBtn")
+    ?.addEventListener("click", closeSettingsModal);
+  document
+    .getElementById("closeSettingsXBtn")
+    ?.addEventListener("click", closeSettingsModal);
+  document
+    .getElementById("settingsModal")
+    ?.addEventListener("click", (event) => {
+      if (event.target.id === "settingsModal") closeSettingsModal();
+    });
+
+  document
+    .getElementById("autoUpdateToggle")
+    ?.addEventListener("change", async (event) => {
+      const checked = Boolean(event.currentTarget.checked);
+      currentSettings = { checkUpdatesOnStartup: checked };
+      try {
+        currentSettings = await invoke("set_settings", {
+          settings: currentSettings
+        });
+      } catch {
+        // Ignore persistence failures so toggle stays responsive.
+      }
+    });
+  document
+    .getElementById("checkUpdatesNowBtn")
+    ?.addEventListener("click", () => runUpdateCheck(true));
+  document
+    .getElementById("openReleasePageBtn")
+    ?.addEventListener("click", openReleasePage);
+  document
+    .getElementById("copyReleaseUrlBtn")
+    ?.addEventListener("click", (event) => {
+      copyText(latestReleaseUrl, event.currentTarget);
+    });
+
+  document
+    .getElementById("openUpdateBannerBtn")
+    ?.addEventListener("click", openReleasePage);
+  document
+    .getElementById("copyUpdateBannerBtn")
+    ?.addEventListener("click", (event) => {
+      copyText(latestReleaseUrl, event.currentTarget);
+    });
+  document
+    .getElementById("dismissUpdateBannerBtn")
+    ?.addEventListener("click", hideUpdateBanner);
+
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
-      const modal = document.getElementById("aboutModal");
-      if (modal && !modal.classList.contains("hidden")) {
+      const aboutModal = document.getElementById("aboutModal");
+      if (aboutModal && !aboutModal.classList.contains("hidden")) {
         closeAboutModal();
+      }
+      const settingsModal = document.getElementById("settingsModal");
+      if (settingsModal && !settingsModal.classList.contains("hidden")) {
+        closeSettingsModal();
       }
     }
   });
@@ -909,12 +1288,7 @@ function bindControls() {
   document
     .getElementById("copyChangeBtn")
     .addEventListener("click", async (event) => {
-      const btn = event.currentTarget;
-      await copyText(
-        document.getElementById("changeResult").innerText.replace(/^=\s*/, ""),
-        btn
-      );
-      await recordHistoryFor("change");
+      await copyCardResult("change", event.currentTarget);
     });
 
   // Card 2: Percentage of Total
@@ -932,12 +1306,7 @@ function bindControls() {
   document
     .getElementById("copyPercentBtn")
     .addEventListener("click", async (event) => {
-      const btn = event.currentTarget;
-      await copyText(
-        document.getElementById("percentResult").innerText.replace(/^=\s*/, ""),
-        btn
-      );
-      await recordHistoryFor("percent");
+      await copyCardResult("percent", event.currentTarget);
     });
 
   // Card 3: Calculate Percentage
@@ -955,12 +1324,7 @@ function bindControls() {
   document
     .getElementById("copyWhatBtn")
     .addEventListener("click", async (event) => {
-      const btn = event.currentTarget;
-      await copyText(
-        document.getElementById("whatResult").innerText.replace(/^=\s*/, ""),
-        btn
-      );
-      await recordHistoryFor("what");
+      await copyCardResult("what", event.currentTarget);
     });
 
   // Card 4: Discount
@@ -982,12 +1346,7 @@ function bindControls() {
   document
     .getElementById("copyDiscountBtn")
     .addEventListener("click", async (event) => {
-      const btn = event.currentTarget;
-      await copyText(
-        document.getElementById("discountResult").innerText.replace(/^=\s*/, ""),
-        btn
-      );
-      await recordHistoryFor("discount");
+      await copyCardResult("discount", event.currentTarget);
     });
 
   // Card 5: Find Original Value
@@ -1005,12 +1364,7 @@ function bindControls() {
   document
     .getElementById("copyBaseBtn")
     .addEventListener("click", async (event) => {
-      const btn = event.currentTarget;
-      await copyText(
-        document.getElementById("baseResult").innerText.replace(/^=\s*/, ""),
-        btn
-      );
-      await recordHistoryFor("base");
+      await copyCardResult("base", event.currentTarget);
     });
 
   // Card 6: Markup & Profit Margin
@@ -1028,12 +1382,7 @@ function bindControls() {
   document
     .getElementById("copyMarkupBtn")
     .addEventListener("click", async (event) => {
-      const btn = event.currentTarget;
-      await copyText(
-        document.getElementById("markupResult").innerText.replace(/^=\s*/, ""),
-        btn
-      );
-      await recordHistoryFor("markup");
+      await copyCardResult("markup", event.currentTarget);
     });
 
   // Card 7: Reverse Tax / VAT
@@ -1051,15 +1400,17 @@ function bindControls() {
   document
     .getElementById("copyTaxBtn")
     .addEventListener("click", async (event) => {
-      const btn = event.currentTarget;
-      await copyText(
-        document.getElementById("taxResult").innerText.replace(/^=\s*/, ""),
-        btn
-      );
-      await recordHistoryFor("tax");
+      await copyCardResult("tax", event.currentTarget);
     });
 
-  // History clear confirmation flow
+  // History filter & clear confirmation flow
+  document
+    .getElementById("historyFilter")
+    ?.addEventListener("change", (event) => {
+      historyFilterValue = event.currentTarget.value || "all";
+      renderHistory();
+    });
+
   const clearHistoryBtn = document.getElementById("clearHistoryBtn");
   const clearConfirmGroup = document.getElementById("clearHistoryConfirm");
   clearHistoryBtn.addEventListener("click", () => {
@@ -1127,6 +1478,8 @@ function bindLiveUpdates() {
   document
     .getElementById("taxRate")
     .addEventListener("input", updateTaxLive);
+
+  attachPasteSanitizers();
 }
 
 function bindEnterKeys() {
@@ -1164,12 +1517,14 @@ function bindEnterKeys() {
 // Verifies the original 30+ checks plus all v2.1 features (swap values,
 // Markup & Margin, Reverse Tax/VAT add & extract, persistent history
 // add/restore/clear, and the redesigned dark-terminal About modal).
-async function runSmokeTestIfRequested() {
-  let enabled = false;
-  try {
-    enabled = await invoke("is_smoke_test");
-  } catch {
-    return;
+async function runSmokeTestIfRequested(smokeEnabledArg) {
+  let enabled = smokeEnabledArg;
+  if (typeof enabled !== "boolean") {
+    try {
+      enabled = await invoke("is_smoke_test");
+    } catch {
+      return;
+    }
   }
   if (!enabled) return;
 
@@ -1198,7 +1553,7 @@ async function runSmokeTestIfRequested() {
 
     const appInfo = await invoke("get_app_info");
     check("app-name", appInfo.name === "Percentage Calculator Tool");
-    check("app-version", appInfo.version === "2.1.1");
+    check("app-version", appInfo.version === "2.2.0");
     check(
       "app-credits",
       appInfo.credits.includes("Mohamed Sayed") &&
@@ -1209,7 +1564,7 @@ async function runSmokeTestIfRequested() {
       "footer-version",
       document
         .getElementById("appVersion")
-        .textContent.includes("Desktop v2.1.1")
+        .textContent.includes("Desktop v2.2.0")
     );
 
     const quickLinks = Array.from(document.querySelectorAll(".quick-nav .quick-link"));
@@ -1302,11 +1657,38 @@ async function runSmokeTestIfRequested() {
       historyText.includes("Markup & Margin") &&
         historyText.includes("Profit: 20.00")
     );
+    const firstTimeText =
+      document.querySelector(".history-time")?.textContent || "";
+    check(
+      "history-timestamp-datetime",
+      /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(firstTimeText)
+    );
 
     await setInput("markupCost", "0", updateMarkupLive);
     check(
       "markup-div-zero",
       text("markupResult").includes("Cost cannot be zero")
+    );
+
+    // Negative formula parenthesization + sanitizer + overflow checks
+    await setInput("changeOrig", "-50", updateChangeLive);
+    await setInput("changeNew", "-25", updateChangeLive);
+    check(
+      "negative-formula-parens",
+      document.getElementById("changeLiveFormula").textContent ===
+        "(((-25) − (-50)) / (-50)) × 100"
+    );
+    check(
+      "sanitize-formatted-number",
+      sanitizeNumericString("$1,250.50") === "1250.50" &&
+        sanitizeNumericString("20%") === "20" &&
+        sanitizeNumericString("+$1,000") === "1000"
+    );
+    await setInput("whatX", "1e308", updateWhatLive);
+    await setInput("whatY", "1000", updateWhatLive);
+    check(
+      "overflow-range-guard",
+      text("whatResult").includes("Value out of range")
     );
 
     // Reverse Tax / VAT checks (add + extract)
@@ -1328,8 +1710,18 @@ async function runSmokeTestIfRequested() {
         text("taxResult").includes("Tax: 15.00")
     );
 
+    // Copy must be blocked while percent card is in error state (isWhatY = 0),
+    // then succeed and record once valid inputs are restored.
+    document.getElementById("copyPercentBtn").click();
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    check(
+      "copy-blocked-on-error",
+      document.getElementById("copyPercentBtn").textContent !== "copied"
+    );
+    await setInput("isWhatY", "200", updatePercentLive);
     document.getElementById("copyPercentBtn").click();
     check("copy-feedback", await waitUntilCopied("copyPercentBtn"));
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
     document.getElementById("clearAllBtn").click();
     check("clear-changeOrig", document.getElementById("changeOrig").value === "");
@@ -1351,24 +1743,61 @@ async function runSmokeTestIfRequested() {
     check("clear-taxResult", text("taxResult").includes("—"));
 
     // Clear all calculators must NOT wipe persistent history
-    check("history-kept-on-clear-all", text("historyCount") === "(1 / 500)");
+    check("history-kept-on-clear-all", text("historyCount") === "(2 / 500)");
 
-    // Restore from history row
+    // Filter history by calculator while keeping total count in header
+    const historyFilterEl = document.getElementById("historyFilter");
+    historyFilterEl.value = "markup";
+    historyFilterEl.dispatchEvent(new Event("change"));
+    check(
+      "history-filter-count-and-rows",
+      text("historyCount") === "(2 / 500)" &&
+        document.querySelectorAll(".history-item").length === 1 &&
+        document.getElementById("historyList").textContent.includes("Markup & Margin")
+    );
+
+    const waitUntil = async (pred) => {
+      for (let i = 0; i < 20; i++) {
+        if (await pred()) return true;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      return Boolean(await pred());
+    };
+
+    // Restore from filtered history row + verify card highlight
     const restoreBtn = document.querySelector(".history-restore-btn");
     restoreBtn.click();
-    await new Promise((resolve) => setTimeout(resolve, 60));
     check(
       "history-restore",
-      document.getElementById("markupCost").value === "80" &&
-        document.getElementById("markupPrice").value === "100" &&
-        text("markupResult").includes("Profit: 20.00")
+      await waitUntil(
+        () =>
+          document.getElementById("markupCost").value === "80" &&
+          document.getElementById("markupPrice").value === "100" &&
+          text("markupResult").includes("Profit: 20.00") &&
+          document.getElementById("card-markup").classList.contains("card-restored")
+      )
+    );
+
+    // Reset filter and delete a single entry
+    historyFilterEl.value = "all";
+    historyFilterEl.dispatchEvent(new Event("change"));
+    check(
+      "history-filter-reset-all",
+      document.querySelectorAll(".history-item").length === 2
+    );
+    document.querySelector(".history-delete-btn").click();
+    check(
+      "history-single-delete",
+      await waitUntil(() => text("historyCount") === "(1 / 500)")
     );
 
     // Clear history confirmation flow
     document.getElementById("clearHistoryBtn").click();
     document.getElementById("confirmClearHistoryBtn").click();
-    await new Promise((resolve) => setTimeout(resolve, 60));
-    check("history-cleared", text("historyCount") === "(0 / 500)");
+    check(
+      "history-cleared",
+      await waitUntil(() => text("historyCount") === "(0 / 500)")
+    );
 
     // Redesigned About modal checks
     document.getElementById("aboutBtn").click();
@@ -1391,6 +1820,38 @@ async function runSmokeTestIfRequested() {
     document.getElementById("closeAboutBtn").click();
     check("about-modal-closed", aboutModal.classList.contains("hidden"));
 
+    // Settings modal & mocked smoke update check
+    document.getElementById("settingsBtn").click();
+    const settingsModal = document.getElementById("settingsModal");
+    check("settings-modal-open", !settingsModal.classList.contains("hidden"));
+    const autoToggle = document.getElementById("autoUpdateToggle");
+    check("settings-default-auto-update", autoToggle.checked === true);
+    autoToggle.checked = false;
+    autoToggle.dispatchEvent(new Event("change"));
+    check(
+      "settings-toggle-persisted-in-memory",
+      await waitUntil(async () => {
+        const s = await invoke("get_settings");
+        return s.checkUpdatesOnStartup === false;
+      })
+    );
+    autoToggle.checked = true;
+    autoToggle.dispatchEvent(new Event("change"));
+    await waitUntil(async () => {
+      const s = await invoke("get_settings");
+      return s.checkUpdatesOnStartup === true;
+    });
+    document.getElementById("checkUpdatesNowBtn").click();
+    check(
+      "settings-manual-update-check",
+      await waitUntil(() =>
+        document.getElementById("updateStatusText").textContent.includes("Up to date")
+      )
+    );
+    document.getElementById("openReleasePageBtn").click();
+    document.getElementById("closeSettingsBtn").click();
+    check("settings-modal-closed", settingsModal.classList.contains("hidden"));
+
     await invoke("copy_text", { text: "percentage-tool-smoke-test" });
   } catch (err) {
     failures.push(`exception: ${err}`);
@@ -1407,6 +1868,13 @@ async function initialize() {
   bindLiveUpdates();
   bindEnterKeys();
 
+  let smokeEnabled = false;
+  try {
+    smokeEnabled = await invoke("is_smoke_test");
+  } catch {
+    smokeEnabled = false;
+  }
+
   await Promise.all([
     updateChangeLive(),
     updatePercentLive(),
@@ -1416,11 +1884,12 @@ async function initialize() {
     updateMarkupLive(),
     updateTaxLive(),
     syncAppInfo(),
-    loadHistory()
+    loadHistory(),
+    loadSettingsAndMaybeCheckUpdates(smokeEnabled)
   ]);
 
   document.getElementById("changeOrig").focus();
-  await runSmokeTestIfRequested();
+  await runSmokeTestIfRequested(smokeEnabled);
 }
 
 initialize();

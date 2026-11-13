@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'sha256-ILHXvQ4ZgNM4TE5UGxcc2CPuQxt/yfauxBvSe5luYrw='; script-src 'sha256-/h1tk+bbUTs570GzviUW0201fgWk3zmmnbV8WX86sOY='; worker-src 'self'; child-src 'self'; img-src 'self' data:; manifest-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'sha256-HppoWhfVX+UyR2KqXbS6U2Q3KafIo1MVyti/h94cX9o='; script-src 'sha256-ZQXl62qYdPBEAyJDvo5T+rGrmzHRdAspjz9OoS7XFbQ='; worker-src 'self'; child-src 'self'; img-src 'self' data:; manifest-src 'self'; connect-src 'self' https://api.github.com; object-src 'none'; base-uri 'none'; form-action 'none';">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0E0F12">
   <meta name="color-scheme" content="dark">
@@ -805,6 +805,111 @@
         padding: 0.15rem 0.48rem;
       }
     }
+
+    .calc-section.card-restored {
+      border-color: #E9A715;
+      box-shadow: 0 0 0 1px rgba(233, 167, 21, 0.35), 0 0 22px rgba(233, 167, 21, 0.14);
+      transition: border-color 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    .update-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      background: rgba(233, 167, 21, 0.1);
+      border: 1px solid rgba(233, 167, 21, 0.45);
+      border-left: 3px solid #E9A715;
+      padding: 0.65rem 0.9rem;
+      margin-bottom: 1.1rem;
+    }
+
+    .update-banner-text {
+      font-size: 0.78rem;
+      color: #eef2ff;
+      font-weight: 500;
+    }
+
+    .update-banner-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+    }
+
+    .update-action-btn {
+      padding: 0.34rem 0.68rem;
+      font-size: 0.72rem;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .history-filter {
+      background: #0E0F12;
+      border: 1px solid #2a2d35;
+      color: #e2e4e8;
+      font-family: inherit;
+      font-size: 0.74rem;
+      padding: 0.36rem 0.6rem;
+      cursor: pointer;
+      min-height: 34px;
+    }
+
+    .history-filter:focus {
+      outline: none;
+      border-color: #E9A715;
+    }
+
+    .history-delete-btn {
+      min-width: 32px;
+      padding-left: 0.55rem;
+      padding-right: 0.55rem;
+      color: #cbd5e6;
+    }
+
+    .history-delete-btn:hover {
+      color: #ff8a8a;
+      border-color: rgba(255, 138, 138, 0.5);
+    }
+
+    .settings-toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      font-size: 0.8rem;
+      color: #eef2ff;
+      cursor: pointer;
+      margin-bottom: 0.55rem;
+    }
+
+    .settings-checkbox {
+      width: 17px;
+      height: 17px;
+      accent-color: #E9A715;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .settings-actions-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-top: 0.75rem;
+    }
+
+    .update-status-text {
+      margin-top: 0.65rem;
+      font-size: 0.74rem;
+      color: #94C59A;
+      line-height: 1.45;
+    }
+
+    .update-status-text.is-error {
+      color: #ff8a8a;
+    }
   </style>
 </head>
 <body>
@@ -818,8 +923,18 @@
       <div class="header-actions">
         <button class="utility-btn install-btn hidden" id="installAppBtn" type="button">install app</button>
         <button class="utility-btn" id="clearAllBtn" type="button">clear all</button>
+        <button class="utility-btn" id="settingsBtn" type="button">settings</button>
         <button class="utility-btn" id="aboutBtn" type="button">about</button>
       </div>
+    </div>
+  </div>
+
+  <div class="update-banner hidden" id="updateBanner" role="status" aria-live="polite">
+    <span class="update-banner-text" id="updateBannerText">Update available.</span>
+    <div class="update-banner-actions">
+      <a class="copy-btn update-action-btn" id="openUpdateBannerBtn" href="https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/latest" target="_blank" rel="noopener noreferrer">open release page</a>
+      <button class="utility-btn update-action-btn" id="copyUpdateBannerBtn" type="button">copy link</button>
+      <button class="reset-btn update-action-btn" id="dismissUpdateBannerBtn" type="button">dismiss</button>
     </div>
   </div>
 
@@ -1092,6 +1207,16 @@
         <div class="section-subtitle history-subtitle">Saved locally on this device · newest first · tap ↺ to restore inputs into calculator.</div>
       </div>
       <div class="history-actions">
+        <select class="history-filter" id="historyFilter" aria-label="Filter history by calculator">
+          <option value="all">all calculators</option>
+          <option value="change">percentage change</option>
+          <option value="percent">% of total</option>
+          <option value="what">calculate %</option>
+          <option value="discount">discount</option>
+          <option value="base">find original</option>
+          <option value="markup">markup &amp; margin</option>
+          <option value="tax">tax / vat</option>
+        </select>
         <button class="reset-btn" id="clearHistoryBtn" type="button">clear history</button>
         <div class="confirm-group hidden" id="clearHistoryConfirm">
           <span class="confirm-label">clear all saved history?</span>
@@ -1105,7 +1230,7 @@
     </div>
   </div>
 
-  <footer>Mohamed Sayed · Ahmed Emara · DeepSeek · ChatGPT · Antigravity · 2026 · <span id="appVersion">Mobile &amp; Web v2.1.1</span></footer>
+  <footer>Mohamed Sayed · Ahmed Emara · DeepSeek · ChatGPT · Antigravity · 2026 · <span id="appVersion">Mobile &amp; Web v2.2.0</span></footer>
 </div>
 
 <div class="modal-backdrop hidden" id="aboutModal" role="dialog" aria-modal="true" aria-labelledby="aboutModalTitle">
@@ -1119,7 +1244,7 @@
       <div class="about-icon-badge" aria-hidden="true">%</div>
       <div>
         <div class="about-app-name" id="aboutAppName">Percentage Calculator Tool</div>
-        <div class="about-version-pill" id="aboutVersionPill">Mobile &amp; Web v2.1.1 · Offline HTML / PWA</div>
+        <div class="about-version-pill" id="aboutVersionPill">Mobile &amp; Web v2.2.0 · Offline HTML / PWA</div>
       </div>
     </div>
 
@@ -1146,7 +1271,7 @@
         <span class="privacy-badge">● Zero Telemetry</span>
         <span class="privacy-badge">● On-Device Engine</span>
       </div>
-      <p class="about-privacy-text" id="aboutPrivacyText">Fully offline. No tracking, no network calls. Calculation history is saved locally on this device only and can be cleared anytime.</p>
+      <p class="about-privacy-text" id="aboutPrivacyText">All calculations run 100% on-device with zero telemetry. History is saved locally on this device only and can be cleared anytime. Optional GitHub Releases update checks can be toggled in Settings.</p>
     </div>
 
     <div class="about-box">
@@ -1200,6 +1325,34 @@
   </div>
 </div>
 
+<div class="modal-backdrop hidden" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-title" id="settingsModalTitle">SETTINGS // PREFERENCES &amp; UPDATES</div>
+      <button class="modal-close-x" id="closeSettingsXBtn" type="button" aria-label="Close Settings dialog">[ × ]</button>
+    </div>
+
+    <div class="about-box">
+      <div class="about-box-title">UPDATES</div>
+      <label class="settings-toggle-row" for="autoUpdateToggle">
+        <input class="settings-checkbox" type="checkbox" id="autoUpdateToggle" checked>
+        <span>Check GitHub Releases automatically on startup</span>
+      </label>
+      <p class="about-privacy-text">Checks only the official GitHub Releases API when enabled or manually triggered. Disable anytime to stay 100% offline on launch.</p>
+      <div class="settings-actions-row">
+        <button class="calc-btn" id="checkUpdatesNowBtn" type="button">check for updates now</button>
+        <a class="utility-btn update-action-btn" id="openReleasePageBtn" href="https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/latest" target="_blank" rel="noopener noreferrer">open github releases</a>
+        <button class="copy-btn" id="copyReleaseUrlBtn" type="button">copy release link</button>
+      </div>
+      <div class="update-status-text" id="updateStatusText">Not checked yet in this session.</div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="calc-btn" id="closeSettingsBtn" type="button">close [esc]</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (() => {
   "use strict";
@@ -1207,8 +1360,14 @@
   const COPY_FEEDBACK_MS = 1200;
   const HISTORY_LIMIT = 500;
   const MAX_FIELD_LEN = 256;
+  const APP_VERSION = "2.2.0";
   const WEB_APP_URL = "https://ciphervaults.github.io/Percentage-Calculator-Tool/";
+  const RELEASE_URL =
+    "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/latest";
+  const GITHUB_LATEST_RELEASE_API =
+    "https://api.github.com/repos/CipherVaults/Percentage-Calculator-Tool/releases/latest";
   const HISTORY_STORAGE_KEY = "pct_tool_history_v2";
+  const SETTINGS_STORAGE_KEY = "pct_tool_settings_v1";
   const ALLOWED_CALCULATORS = new Set([
     "change",
     "percent",
@@ -1221,7 +1380,12 @@
 
   let taxMode = "add";
   let memoryHistory = [];
+  let allHistoryEntries = [];
+  let historyFilterValue = "all";
+  let currentSettings = { checkUpdatesOnStartup: true };
+  let latestReleaseUrl = RELEASE_URL;
   let deferredInstallPrompt = null;
+  let swRegistration = null;
 
   const seq = {
     change: 0,
@@ -1558,20 +1722,121 @@
     return [];
   }
 
+  function deleteHistoryEntry(id) {
+    const targetId = Number(id);
+    if (!Number.isFinite(targetId)) return readHistoryFromStorage();
+    const entries = readHistoryFromStorage().filter(
+      (item) => Number(item.id) !== targetId
+    );
+    return writeHistoryToStorage(entries);
+  }
+
+  function readSettingsFromStorage() {
+    try {
+      const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
+      if (!raw) return { checkUpdatesOnStartup: true };
+      const parsed = JSON.parse(raw);
+      return {
+        checkUpdatesOnStartup:
+          typeof parsed?.checkUpdatesOnStartup === "boolean"
+            ? parsed.checkUpdatesOnStartup
+            : true
+      };
+    } catch {
+      return { checkUpdatesOnStartup: true };
+    }
+  }
+
+  function writeSettingsToStorage(settings) {
+    const clean = {
+      checkUpdatesOnStartup: Boolean(settings?.checkUpdatesOnStartup)
+    };
+    currentSettings = clean;
+    try {
+      window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(clean));
+    } catch {
+      // Ignore storage errors cleanly.
+    }
+    return clean;
+  }
+
   // --- DOM helpers & clipboard ---
+
+  const CALC_INPUT_IDS = [
+    "changeOrig",
+    "changeNew",
+    "isWhatX",
+    "isWhatY",
+    "whatX",
+    "whatY",
+    "discountPrice",
+    "discountPercent",
+    "baseX",
+    "baseY",
+    "markupCost",
+    "markupPrice",
+    "taxAmount",
+    "taxRate"
+  ];
+
+  function sanitizeNumericString(raw) {
+    if (typeof raw !== "string") return "";
+    const trimmed = raw.trim();
+    if (!trimmed) return "";
+    let cleaned = trimmed.replace(/[\s_,$€£¥₹₩₽₺₫₪₱฿%]+/g, "");
+    cleaned = cleaned.replace(
+      /^(?:USD|EUR|GBP|JPY|CAD|AUD|CHF|INR)(?=[-+]?\d|\.)/i,
+      ""
+    );
+    if (cleaned.startsWith("+")) {
+      cleaned = cleaned.slice(1);
+    }
+    return cleaned;
+  }
+
+  function fmtFormulaNum(n) {
+    if (typeof n !== "number" || !Number.isFinite(n)) return String(n);
+    if (n === 0) return "0";
+    return n < 0 ? `(${n})` : String(n);
+  }
+
+  function fmtFormulaText(text) {
+    const trimmed = String(text ?? "").trim();
+    return trimmed.startsWith("-") ? `(${trimmed})` : trimmed;
+  }
 
   function getNumber(id) {
     const el = document.getElementById(id);
     if (!el) return null;
-    const val = el.value.trim();
-    if (val === "") return null;
-    const num = parseFloat(val);
+    const cleaned = sanitizeNumericString(el.value);
+    if (cleaned === "") return null;
+    const num = Number(cleaned);
     return Number.isNaN(num) ? null : num;
   }
 
   function getRawInput(id) {
     const el = document.getElementById(id);
-    return el ? el.value.trim() : "";
+    return el ? sanitizeNumericString(el.value) : "";
+  }
+
+  function attachPasteSanitizers() {
+    const plainNumberRe = /^-?\d*\.?\d+(?:[eE][-+]?\d+)?$/;
+    CALC_INPUT_IDS.forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener("paste", (event) => {
+        const rawText = event.clipboardData?.getData("text");
+        if (typeof rawText !== "string") return;
+        const trimmed = rawText.trim();
+        if (!trimmed || plainNumberRe.test(trimmed)) return;
+        const cleaned = sanitizeNumericString(trimmed);
+        if (cleaned !== "" && !Number.isNaN(Number(cleaned))) {
+          event.preventDefault();
+          el.value = cleaned;
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+        }
+      });
+    });
   }
 
   function setLines(el, lines) {
@@ -1649,18 +1914,31 @@
   }
 
   async function copyText(text, button) {
+    if (typeof text !== "string" || text.trim() === "") return false;
     try {
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(text);
         showCopyFeedback(button);
-        return;
+        return true;
       }
     } catch {
       // Fall through to execCommand fallback for file:// or iOS webviews.
     }
     if (legacyCopyText(text)) {
       showCopyFeedback(button);
+      return true;
     }
+    return false;
+  }
+
+  function copyCardResult(key, button) {
+    const calc = lastValidCalc[key];
+    if (!calc || !calc.copyText) return Promise.resolve(false);
+    return copyText(calc.copyText, button).then((copied) => {
+      if (!copied) return false;
+      recordHistoryFor(key);
+      return true;
+    });
   }
 
   function swapFields(aId, bId, updateFn) {
@@ -1686,18 +1964,54 @@
 
   // --- Calculator updates ---
 
+  function setCardOutOfRange(
+    key,
+    formulaDiv,
+    resultSpan,
+    resultId,
+    defaultFormula
+  ) {
+    lastValidCalc[key] = null;
+    if (Array.isArray(defaultFormula)) {
+      setLines(formulaDiv, defaultFormula);
+    } else {
+      formulaDiv.textContent = defaultFormula;
+    }
+    resultSpan.textContent = "→ invalid";
+    setResult(resultId, "Value out of range", true);
+  }
+
+  function allFiniteValues(obj, keys) {
+    return (
+      Boolean(obj) &&
+      keys.every((k) => typeof obj[k] === "number" && Number.isFinite(obj[k]))
+    );
+  }
+
   function updateChangeLive() {
     ++seq.change;
     const orig = getNumber("changeOrig");
     const newVal = getNumber("changeNew");
     const formulaDiv = document.getElementById("changeLiveFormula");
     const resultSpan = document.getElementById("changeLiveResult");
+    const defaultFormula = "((new − original) / original) × 100";
 
     if (orig === null || newVal === null) {
       lastValidCalc.change = null;
-      formulaDiv.textContent = "((new − original) / original) × 100";
+      formulaDiv.textContent = defaultFormula;
       resultSpan.textContent = "→ —";
       setResult("changeResult", "—");
+      return;
+    }
+
+    if (!Number.isFinite(orig) || !Number.isFinite(newVal)) {
+      setCardOutOfRange(
+        "change",
+        formulaDiv,
+        resultSpan,
+        "changeResult",
+        defaultFormula
+      );
       return;
     }
 
@@ -1706,7 +2020,7 @@
       lastValidCalc.change = null;
       setFormulaError(
         formulaDiv,
-        "((new − original) / original) × 100",
+        defaultFormula,
         "(original cannot be zero)"
       );
       resultSpan.textContent = "→ invalid";
@@ -1714,7 +2028,18 @@
       return;
     }
 
-    formulaDiv.textContent = `((${newVal} − ${orig}) / ${orig}) × 100`;
+    if (!allFiniteValues(result, ["value"])) {
+      setCardOutOfRange(
+        "change",
+        formulaDiv,
+        resultSpan,
+        "changeResult",
+        defaultFormula
+      );
+      return;
+    }
+
+    formulaDiv.textContent = `((${fmtFormulaNum(newVal)} − ${fmtFormulaNum(orig)}) / ${fmtFormulaNum(orig)}) × 100`;
     resultSpan.textContent = `→ ${result.liveResult}`;
     setResult("changeResult", result.label);
 
@@ -1736,25 +2061,48 @@
     const y = getNumber("isWhatY");
     const formulaDiv = document.getElementById("percentLiveFormula");
     const resultSpan = document.getElementById("percentLiveResult");
+    const defaultFormula = "(X / Y) × 100";
 
     if (x === null || y === null) {
       lastValidCalc.percent = null;
-      formulaDiv.textContent = "(X / Y) × 100";
+      formulaDiv.textContent = defaultFormula;
       resultSpan.textContent = "→ —";
       setResult("percentResult", "—");
+      return;
+    }
+
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      setCardOutOfRange(
+        "percent",
+        formulaDiv,
+        resultSpan,
+        "percentResult",
+        defaultFormula
+      );
       return;
     }
 
     const result = calcPercentOfTotal(x, y);
     if (result.ok === "false") {
       lastValidCalc.percent = null;
-      setFormulaError(formulaDiv, "(X / Y) × 100", "(Y cannot be zero)");
+      setFormulaError(formulaDiv, defaultFormula, "(Y cannot be zero)");
       resultSpan.textContent = "→ invalid";
       setResult("percentResult", result.error, true);
       return;
     }
 
-    formulaDiv.textContent = `(${x} / ${y}) × 100`;
+    if (!allFiniteValues(result, ["value"])) {
+      setCardOutOfRange(
+        "percent",
+        formulaDiv,
+        resultSpan,
+        "percentResult",
+        defaultFormula
+      );
+      return;
+    }
+
+    formulaDiv.textContent = `(${fmtFormulaNum(x)} / ${fmtFormulaNum(y)}) × 100`;
     resultSpan.textContent = `→ ${result.label}`;
     setResult("percentResult", result.label);
 
@@ -1776,17 +2124,28 @@
     const y = getNumber("whatY");
     const formulaDiv = document.getElementById("whatLiveFormula");
     const resultSpan = document.getElementById("whatLiveResult");
+    const defaultFormula = "(X / 100) × Y";
 
     if (x === null || y === null) {
       lastValidCalc.what = null;
-      formulaDiv.textContent = "(X / 100) × Y";
+      formulaDiv.textContent = defaultFormula;
       resultSpan.textContent = "→ —";
       setResult("whatResult", "—");
       return;
     }
 
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      setCardOutOfRange("what", formulaDiv, resultSpan, "whatResult", defaultFormula);
+      return;
+    }
+
     const result = calcPortion(x, y);
-    formulaDiv.textContent = `(${x} / 100) × ${y}`;
+    if (!allFiniteValues(result, ["value"])) {
+      setCardOutOfRange("what", formulaDiv, resultSpan, "whatResult", defaultFormula);
+      return;
+    }
+
+    formulaDiv.textContent = `(${fmtFormulaNum(x)} / 100) × ${fmtFormulaNum(y)}`;
     resultSpan.textContent = `→ ${result.label}`;
     setResult("whatResult", result.label);
 
@@ -1808,22 +2167,45 @@
     const disc = getNumber("discountPercent");
     const formulaDiv = document.getElementById("discountLiveFormula");
     const resultSpan = document.getElementById("discountLiveResult");
+    const defaultLines = [
+      "final = price × (1 − discount/100)",
+      "saved = price × discount/100"
+    ];
 
     if (price === null || disc === null) {
       lastValidCalc.discount = null;
-      setLines(formulaDiv, [
-        "final = price × (1 − discount/100)",
-        "saved = price × discount/100"
-      ]);
+      setLines(formulaDiv, defaultLines);
       resultSpan.textContent = "→ —";
       setResult("discountResult", "—");
       return;
     }
 
+    if (!Number.isFinite(price) || !Number.isFinite(disc)) {
+      setCardOutOfRange(
+        "discount",
+        formulaDiv,
+        resultSpan,
+        "discountResult",
+        defaultLines
+      );
+      return;
+    }
+
     const result = calcDiscount(price, disc);
+    if (!allFiniteValues(result, ["finalPrice", "saved"])) {
+      setCardOutOfRange(
+        "discount",
+        formulaDiv,
+        resultSpan,
+        "discountResult",
+        defaultLines
+      );
+      return;
+    }
+
     setLines(formulaDiv, [
-      `final = ${price} × (1 − ${disc}/100) = ${result.finalText}`,
-      `saved = ${price} × ${disc}/100 = ${result.savedText}`
+      `final = ${fmtFormulaNum(price)} × (1 − ${fmtFormulaNum(disc)}/100) = ${result.finalText}`,
+      `saved = ${fmtFormulaNum(price)} × ${fmtFormulaNum(disc)}/100 = ${result.savedText}`
     ]);
     resultSpan.textContent = `→ final: ${result.finalText} | saved: ${result.savedText}`;
     setResult("discountResult", result.label);
@@ -1846,25 +2228,36 @@
     const y = getNumber("baseY");
     const formulaDiv = document.getElementById("baseLiveFormula");
     const resultSpan = document.getElementById("baseLiveResult");
+    const defaultFormula = "X / (Y / 100)";
 
     if (x === null || y === null) {
       lastValidCalc.base = null;
-      formulaDiv.textContent = "X / (Y / 100)";
+      formulaDiv.textContent = defaultFormula;
       resultSpan.textContent = "→ —";
       setResult("baseResult", "—");
+      return;
+    }
+
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      setCardOutOfRange("base", formulaDiv, resultSpan, "baseResult", defaultFormula);
       return;
     }
 
     const result = calcOriginal(x, y);
     if (result.ok === "false") {
       lastValidCalc.base = null;
-      setFormulaError(formulaDiv, "X / (Y / 100)", "(Y cannot be zero)");
+      setFormulaError(formulaDiv, defaultFormula, "(Y cannot be zero)");
       resultSpan.textContent = "→ invalid";
       setResult("baseResult", result.error, true);
       return;
     }
 
-    formulaDiv.textContent = `${x} / (${y} / 100)`;
+    if (!allFiniteValues(result, ["value"])) {
+      setCardOutOfRange("base", formulaDiv, resultSpan, "baseResult", defaultFormula);
+      return;
+    }
+
+    formulaDiv.textContent = `${fmtFormulaNum(x)} / (${fmtFormulaNum(y)} / 100)`;
     resultSpan.textContent = `→ ${result.label}`;
     setResult("baseResult", result.label);
 
@@ -1886,16 +2279,28 @@
     const price = getNumber("markupPrice");
     const formulaDiv = document.getElementById("markupLiveFormula");
     const resultSpan = document.getElementById("markupLiveResult");
+    const defaultLines = [
+      "profit = price − cost",
+      "markup = (profit / cost) × 100",
+      "margin = (profit / price) × 100"
+    ];
 
     if (cost === null || price === null) {
       lastValidCalc.markup = null;
-      setLines(formulaDiv, [
-        "profit = price − cost",
-        "markup = (profit / cost) × 100",
-        "margin = (profit / price) × 100"
-      ]);
+      setLines(formulaDiv, defaultLines);
       resultSpan.textContent = "→ —";
       setResult("markupResult", "—");
+      return;
+    }
+
+    if (!Number.isFinite(cost) || !Number.isFinite(price)) {
+      setCardOutOfRange(
+        "markup",
+        formulaDiv,
+        resultSpan,
+        "markupResult",
+        defaultLines
+      );
       return;
     }
 
@@ -1912,10 +2317,21 @@
       return;
     }
 
+    if (!allFiniteValues(result, ["profit", "markup", "margin"])) {
+      setCardOutOfRange(
+        "markup",
+        formulaDiv,
+        resultSpan,
+        "markupResult",
+        defaultLines
+      );
+      return;
+    }
+
     setLines(formulaDiv, [
-      `profit = ${price} − ${cost} = ${result.profitText}`,
-      `markup = (${result.profitText} / ${cost}) × 100 = ${result.markupText}`,
-      `margin = (${result.profitText} / ${price}) × 100 = ${result.marginText}`
+      `profit = ${fmtFormulaNum(price)} − ${fmtFormulaNum(cost)} = ${result.profitText}`,
+      `markup = (${fmtFormulaText(result.profitText)} / ${fmtFormulaNum(cost)}) × 100 = ${result.markupText}`,
+      `margin = (${fmtFormulaText(result.profitText)} / ${fmtFormulaNum(price)}) × 100 = ${result.marginText}`
     ]);
     resultSpan.textContent = `→ ${result.liveResult}`;
     setResult("markupResult", result.label);
@@ -1963,22 +2379,21 @@
     const mode = taxMode;
     const formulaDiv = document.getElementById("taxLiveFormula");
     const resultSpan = document.getElementById("taxLiveResult");
+    const defaultLines =
+      mode === "extract"
+        ? ["net = total / (1 + rate/100)", "tax = total − net"]
+        : ["tax = net × (rate / 100)", "total = net + tax"];
 
     if (amount === null || rate === null) {
       lastValidCalc.tax = null;
-      if (mode === "extract") {
-        setLines(formulaDiv, [
-          "net = total / (1 + rate/100)",
-          "tax = total − net"
-        ]);
-      } else {
-        setLines(formulaDiv, [
-          "tax = net × (rate / 100)",
-          "total = net + tax"
-        ]);
-      }
+      setLines(formulaDiv, defaultLines);
       resultSpan.textContent = "→ —";
       setResult("taxResult", "—");
+      return;
+    }
+
+    if (!Number.isFinite(amount) || !Number.isFinite(rate)) {
+      setCardOutOfRange("tax", formulaDiv, resultSpan, "taxResult", defaultLines);
       return;
     }
 
@@ -1995,15 +2410,20 @@
       return;
     }
 
+    if (!allFiniteValues(result, ["net", "tax", "total"])) {
+      setCardOutOfRange("tax", formulaDiv, resultSpan, "taxResult", defaultLines);
+      return;
+    }
+
     if (mode === "extract") {
       setLines(formulaDiv, [
-        `net = ${amount} / (1 + ${rate}/100) = ${result.netText}`,
-        `tax = ${amount} − ${result.netText} = ${result.taxText}`
+        `net = ${fmtFormulaNum(amount)} / (1 + ${fmtFormulaNum(rate)}/100) = ${result.netText}`,
+        `tax = ${fmtFormulaNum(amount)} − ${fmtFormulaText(result.netText)} = ${result.taxText}`
       ]);
     } else {
       setLines(formulaDiv, [
-        `tax = ${amount} × (${rate} / 100) = ${result.taxText}`,
-        `total = ${amount} + ${result.taxText} = ${result.totalText}`
+        `tax = ${fmtFormulaNum(amount)} × (${fmtFormulaNum(rate)} / 100) = ${result.taxText}`,
+        `total = ${fmtFormulaNum(amount)} + ${fmtFormulaText(result.taxText)} = ${result.totalText}`
       ]);
     }
     resultSpan.textContent = `→ ${result.liveResult}`;
@@ -2030,11 +2450,31 @@
   // --- History UI ---
 
   function formatHistoryTime(timestampMs) {
-    if (!timestampMs) return "--:--:--";
+    if (!timestampMs) return "---- --:--:--";
     const date = new Date(timestampMs);
-    if (Number.isNaN(date.getTime())) return "--:--:--";
+    if (Number.isNaN(date.getTime())) return "---- --:--:--";
     const pad = (n) => String(n).padStart(2, "0");
-    return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+    const year = date.getFullYear();
+    const month = pad(date.getMonth() + 1);
+    const day = pad(date.getDate());
+    const hh = pad(date.getHours());
+    const mm = pad(date.getMinutes());
+    const ss = pad(date.getSeconds());
+    return `${year}-${month}-${day} ${hh}:${mm}:${ss}`;
+  }
+
+  function flashRestoredCard(cardId) {
+    const cardEl = document.getElementById(cardId);
+    if (!cardEl) return;
+    cardEl.scrollIntoView({ behavior: "smooth", block: "center" });
+    cardEl.classList.remove("card-restored");
+    void cardEl.offsetWidth;
+    cardEl.classList.add("card-restored");
+    window.clearTimeout(Number(cardEl.dataset.restoreTimer || 0));
+    const timer = window.setTimeout(() => {
+      cardEl.classList.remove("card-restored");
+    }, 900);
+    cardEl.dataset.restoreTimer = String(timer);
   }
 
   function restoreHistoryEntry(entry) {
@@ -2067,11 +2507,7 @@
     elA.value = entry.inputA;
     elB.value = entry.inputB;
     target.fn();
-
-    document.getElementById(target.card)?.scrollIntoView({
-      behavior: "smooth",
-      block: "nearest"
-    });
+    flashRestoredCard(target.card);
     elA.focus({ preventScroll: true });
   }
 
@@ -2080,20 +2516,36 @@
     const listEl = document.getElementById("historyList");
     if (!countEl || !listEl) return;
 
-    const list = Array.isArray(entries) ? entries : [];
-    countEl.textContent = `(${list.length} / ${HISTORY_LIMIT})`;
+    if (Array.isArray(entries)) {
+      allHistoryEntries = entries;
+    }
+
+    countEl.textContent = `(${allHistoryEntries.length} / ${HISTORY_LIMIT})`;
     listEl.replaceChildren();
 
-    if (list.length === 0) {
+    const filterEl = document.getElementById("historyFilter");
+    if (filterEl) {
+      historyFilterValue = filterEl.value || "all";
+    }
+    const visibleList =
+      historyFilterValue === "all"
+        ? allHistoryEntries
+        : allHistoryEntries.filter(
+            (entry) => entry.calculator === historyFilterValue
+          );
+
+    if (visibleList.length === 0) {
       const emptyDiv = document.createElement("div");
       emptyDiv.className = "history-empty";
       emptyDiv.textContent =
-        "No calculations recorded yet. Press calculate, Enter, or copy on any card to save to history.";
+        allHistoryEntries.length === 0
+          ? "No calculations recorded yet. Press calculate, Enter, or copy on any card to save to history."
+          : "No matching calculations for this filter.";
       listEl.appendChild(emptyDiv);
       return;
     }
 
-    list.forEach((entry) => {
+    visibleList.forEach((entry) => {
       const item = document.createElement("div");
       item.className = "history-item";
 
@@ -2141,7 +2593,17 @@
         restoreHistoryEntry(entry);
       });
 
-      actions.append(copyBtn, restoreBtn);
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className = "reset-btn history-delete-btn";
+      deleteBtn.type = "button";
+      deleteBtn.textContent = "×";
+      deleteBtn.title = "Delete history entry";
+      deleteBtn.setAttribute("aria-label", "Delete history entry");
+      deleteBtn.addEventListener("click", () => {
+        renderHistory(deleteHistoryEntry(entry.id));
+      });
+
+      actions.append(copyBtn, restoreBtn, deleteBtn);
       item.append(main, actions);
       listEl.appendChild(item);
     });
@@ -2248,6 +2710,131 @@
     openModal("installModal", "closeInstallBtn");
   }
 
+  function parseSemverTriplet(raw) {
+    if (typeof raw !== "string") return null;
+    const stripped = raw.trim().replace(/^v/i, "").split(/[-+]/)[0];
+    const parts = stripped.split(".");
+    if (parts.length !== 3) return null;
+    const nums = parts.map((p) => (/^\d+$/.test(p) ? Number(p) : NaN));
+    if (nums.some((n) => !Number.isInteger(n) || n < 0)) return null;
+    return nums;
+  }
+
+  function isNewerVersion(current, latest) {
+    const cur = parseSemverTriplet(current);
+    const nxt = parseSemverTriplet(latest);
+    if (!cur || !nxt) return false;
+    for (let i = 0; i < 3; i++) {
+      if (nxt[i] !== cur[i]) return nxt[i] > cur[i];
+    }
+    return false;
+  }
+
+  function setUpdateStatus(text, isError = false) {
+    const statusEl = document.getElementById("updateStatusText");
+    if (!statusEl) return;
+    statusEl.textContent = text;
+    statusEl.classList.toggle("is-error", isError);
+  }
+
+  function setReleaseLinks(url) {
+    const safeUrl =
+      typeof url === "string" &&
+      url.startsWith("https://github.com/CipherVaults/Percentage-Calculator-Tool/")
+        ? url
+        : RELEASE_URL;
+    latestReleaseUrl = safeUrl;
+    const bannerLink = document.getElementById("openUpdateBannerBtn");
+    const settingsLink = document.getElementById("openReleasePageBtn");
+    if (bannerLink) bannerLink.href = safeUrl;
+    if (settingsLink) settingsLink.href = safeUrl;
+  }
+
+  function showUpdateBanner(latestVersion, releaseUrl) {
+    const banner = document.getElementById("updateBanner");
+    const textEl = document.getElementById("updateBannerText");
+    if (!banner || !textEl) return;
+    setReleaseLinks(releaseUrl);
+    textEl.textContent = `Update available: v${latestVersion} is now released on GitHub.`;
+    banner.classList.remove("hidden");
+  }
+
+  function hideUpdateBanner() {
+    const banner = document.getElementById("updateBanner");
+    if (banner) banner.classList.add("hidden");
+  }
+
+  async function runUpdateCheck(manual = false) {
+    const checkBtn = document.getElementById("checkUpdatesNowBtn");
+    if (checkBtn) checkBtn.disabled = true;
+    if (manual) {
+      setUpdateStatus("Checking GitHub Releases for updates...", false);
+      if (swRegistration?.update) {
+        swRegistration.update().catch(() => {});
+      }
+    }
+    try {
+      const response = await fetch(GITHUB_LATEST_RELEASE_API, {
+        headers: { Accept: "application/vnd.github+json" },
+        cache: "no-store"
+      });
+      if (!response.ok) {
+        if (manual) {
+          setUpdateStatus(`GitHub returned HTTP ${response.status}.`, true);
+        }
+        return;
+      }
+      const data = await response.json();
+      if (data?.draft || data?.prerelease) {
+        if (manual) {
+          setUpdateStatus(`Up to date — running Mobile & Web v${APP_VERSION}.`, false);
+        }
+        return;
+      }
+      const rawTag = String(data?.tag_name || "").trim();
+      const triplet = parseSemverTriplet(rawTag);
+      if (!triplet) {
+        if (manual) {
+          setUpdateStatus("Unexpected version format in GitHub release metadata.", true);
+        }
+        return;
+      }
+      const latestVersion = triplet.join(".");
+      const releaseUrl = data?.html_url || RELEASE_URL;
+      setReleaseLinks(releaseUrl);
+
+      if (isNewerVersion(APP_VERSION, latestVersion)) {
+        showUpdateBanner(latestVersion, releaseUrl);
+        setUpdateStatus(
+          `New version available: v${latestVersion} (current: v${APP_VERSION}).`,
+          false
+        );
+      } else {
+        hideUpdateBanner();
+        if (manual) {
+          setUpdateStatus(`Up to date — running v${latestVersion}.`, false);
+        }
+      }
+    } catch {
+      if (manual) {
+        setUpdateStatus(
+          "Unable to reach GitHub Releases right now (offline or blocked).",
+          true
+        );
+      }
+    } finally {
+      if (checkBtn) checkBtn.disabled = false;
+    }
+  }
+
+  function syncSettingsUi() {
+    currentSettings = readSettingsFromStorage();
+    const toggle = document.getElementById("autoUpdateToggle");
+    if (toggle) {
+      toggle.checked = Boolean(currentSettings.checkUpdatesOnStartup);
+    }
+  }
+
   function bindControls() {
     document
       .getElementById("installAppBtn")
@@ -2262,6 +2849,11 @@
     document
       .getElementById("clearAllBtn")
       .addEventListener("click", clearAllCalculators);
+    document
+      .getElementById("settingsBtn")
+      ?.addEventListener("click", () =>
+        openModal("settingsModal", "closeSettingsBtn")
+      );
     document
       .getElementById("aboutBtn")
       .addEventListener("click", () => openModal("aboutModal", "closeAboutBtn"));
@@ -2280,6 +2872,50 @@
     document.getElementById("aboutModal").addEventListener("click", (event) => {
       if (event.target.id === "aboutModal") closeModal("aboutModal", "aboutBtn");
     });
+
+    document
+      .getElementById("closeSettingsBtn")
+      ?.addEventListener("click", () =>
+        closeModal("settingsModal", "settingsBtn")
+      );
+    document
+      .getElementById("closeSettingsXBtn")
+      ?.addEventListener("click", () =>
+        closeModal("settingsModal", "settingsBtn")
+      );
+    document
+      .getElementById("settingsModal")
+      ?.addEventListener("click", (event) => {
+        if (event.target.id === "settingsModal") {
+          closeModal("settingsModal", "settingsBtn");
+        }
+      });
+
+    document
+      .getElementById("autoUpdateToggle")
+      ?.addEventListener("change", (event) => {
+        writeSettingsToStorage({
+          checkUpdatesOnStartup: Boolean(event.currentTarget.checked)
+        });
+      });
+    document
+      .getElementById("checkUpdatesNowBtn")
+      ?.addEventListener("click", () => {
+        runUpdateCheck(true);
+      });
+    document
+      .getElementById("copyReleaseUrlBtn")
+      ?.addEventListener("click", (event) => {
+        copyText(latestReleaseUrl, event.currentTarget);
+      });
+    document
+      .getElementById("copyUpdateBannerBtn")
+      ?.addEventListener("click", (event) => {
+        copyText(latestReleaseUrl, event.currentTarget);
+      });
+    document
+      .getElementById("dismissUpdateBannerBtn")
+      ?.addEventListener("click", hideUpdateBanner);
 
     document
       .getElementById("closeInstallBtn")
@@ -2303,10 +2939,13 @@
       if (event.key !== "Escape") return;
       const about = document.getElementById("aboutModal");
       const install = document.getElementById("installModal");
+      const settings = document.getElementById("settingsModal");
       if (about && !about.classList.contains("hidden")) {
         closeModal("aboutModal", "aboutBtn");
       } else if (install && !install.classList.contains("hidden")) {
         closeModal("installModal", "installAppBtn");
+      } else if (settings && !settings.classList.contains("hidden")) {
+        closeModal("settingsModal", "settingsBtn");
       }
     });
 
@@ -2325,6 +2964,9 @@
     window.addEventListener("storage", (event) => {
       if (event.key === HISTORY_STORAGE_KEY || event.key === null) {
         loadHistory();
+      }
+      if (event.key === SETTINGS_STORAGE_KEY || event.key === null) {
+        syncSettingsUi();
       }
     });
 
@@ -2386,11 +3028,7 @@
     document
       .getElementById("copyChangeBtn")
       .addEventListener("click", async (event) => {
-        await copyText(
-          document.getElementById("changeResult").innerText.replace(/^=\s*/, ""),
-          event.currentTarget
-        );
-        recordHistoryFor("change");
+        await copyCardResult("change", event.currentTarget);
       });
 
     document.getElementById("calcPercentBtn").addEventListener("click", () => {
@@ -2405,13 +3043,7 @@
     document
       .getElementById("copyPercentBtn")
       .addEventListener("click", async (event) => {
-        await copyText(
-          document
-            .getElementById("percentResult")
-            .innerText.replace(/^=\s*/, ""),
-          event.currentTarget
-        );
-        recordHistoryFor("percent");
+        await copyCardResult("percent", event.currentTarget);
       });
 
     document.getElementById("calcWhatBtn").addEventListener("click", () => {
@@ -2426,11 +3058,7 @@
     document
       .getElementById("copyWhatBtn")
       .addEventListener("click", async (event) => {
-        await copyText(
-          document.getElementById("whatResult").innerText.replace(/^=\s*/, ""),
-          event.currentTarget
-        );
-        recordHistoryFor("what");
+        await copyCardResult("what", event.currentTarget);
       });
 
     document
@@ -2451,13 +3079,7 @@
     document
       .getElementById("copyDiscountBtn")
       .addEventListener("click", async (event) => {
-        await copyText(
-          document
-            .getElementById("discountResult")
-            .innerText.replace(/^=\s*/, ""),
-          event.currentTarget
-        );
-        recordHistoryFor("discount");
+        await copyCardResult("discount", event.currentTarget);
       });
 
     document.getElementById("calcBaseBtn").addEventListener("click", () => {
@@ -2472,11 +3094,7 @@
     document
       .getElementById("copyBaseBtn")
       .addEventListener("click", async (event) => {
-        await copyText(
-          document.getElementById("baseResult").innerText.replace(/^=\s*/, ""),
-          event.currentTarget
-        );
-        recordHistoryFor("base");
+        await copyCardResult("base", event.currentTarget);
       });
 
     document.getElementById("calcMarkupBtn").addEventListener("click", () => {
@@ -2495,11 +3113,7 @@
     document
       .getElementById("copyMarkupBtn")
       .addEventListener("click", async (event) => {
-        await copyText(
-          document.getElementById("markupResult").innerText.replace(/^=\s*/, ""),
-          event.currentTarget
-        );
-        recordHistoryFor("markup");
+        await copyCardResult("markup", event.currentTarget);
       });
 
     document.getElementById("calcTaxBtn").addEventListener("click", () => {
@@ -2514,14 +3128,17 @@
     document
       .getElementById("copyTaxBtn")
       .addEventListener("click", async (event) => {
-        await copyText(
-          document.getElementById("taxResult").innerText.replace(/^=\s*/, ""),
-          event.currentTarget
-        );
-        recordHistoryFor("tax");
+        await copyCardResult("tax", event.currentTarget);
       });
 
-    // History clear confirmation flow
+    // History filter & clear confirmation flow
+    document
+      .getElementById("historyFilter")
+      ?.addEventListener("change", (event) => {
+        historyFilterValue = event.currentTarget.value || "all";
+        renderHistory();
+      });
+
     const clearHistoryBtn = document.getElementById("clearHistoryBtn");
     const clearConfirmGroup = document.getElementById("clearHistoryConfirm");
     clearHistoryBtn.addEventListener("click", () => {
@@ -2582,6 +3199,8 @@
       .getElementById("taxAmount")
       .addEventListener("input", updateTaxLive);
     document.getElementById("taxRate").addEventListener("input", updateTaxLive);
+
+    attachPasteSanitizers();
   }
 
   function bindEnterKeys() {
@@ -2621,7 +3240,12 @@
       window.location.hostname === "localhost" ||
       window.location.hostname === "127.0.0.1";
     if (isHttpOrigin && "serviceWorker" in navigator) {
-      navigator.serviceWorker.register("./sw.js", { scope: "./" }).catch(() => {});
+      navigator.serviceWorker
+        .register("./sw.js", { scope: "./" })
+        .then((reg) => {
+          swRegistration = reg;
+        })
+        .catch(() => {});
     }
   }
 
@@ -2638,8 +3262,13 @@
     updateMarkupLive();
     updateTaxLive();
     loadHistory();
+    syncSettingsUi();
     updateInstallUi();
     registerServiceWorkerIfSupported();
+
+    if (currentSettings.checkUpdatesOnStartup) {
+      runUpdateCheck(false);
+    }
 
     // Avoid forcing the virtual keyboard open on touch devices.
     if (!window.matchMedia("(pointer: coarse)").matches) {

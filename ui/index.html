@@ -18,8 +18,18 @@
       </div>
       <div class="header-actions">
         <button class="utility-btn" id="clearAllBtn" type="button">clear all</button>
+        <button class="utility-btn" id="settingsBtn" type="button">settings</button>
         <button class="utility-btn" id="aboutBtn" type="button">about</button>
       </div>
+    </div>
+  </div>
+
+  <div class="update-banner hidden" id="updateBanner" role="status" aria-live="polite">
+    <div class="update-banner-text" id="updateBannerText">A new version is available on GitHub Releases.</div>
+    <div class="update-banner-actions">
+      <button class="calc-btn update-action-btn" id="openUpdateBannerBtn" type="button">open release page</button>
+      <button class="copy-btn update-action-btn" id="copyUpdateBannerBtn" type="button">copy link</button>
+      <button class="reset-btn update-action-btn" id="dismissUpdateBannerBtn" type="button">dismiss</button>
     </div>
   </div>
 
@@ -292,6 +302,16 @@
         <div class="section-subtitle history-subtitle">Saved locally on this PC · newest first · click ↺ to restore inputs into calculator.</div>
       </div>
       <div class="history-actions">
+        <select class="history-filter" id="historyFilter" aria-label="Filter history by calculator">
+          <option value="all">all calculators</option>
+          <option value="change">percentage change</option>
+          <option value="percent">% of total</option>
+          <option value="what">calculate %</option>
+          <option value="discount">discount</option>
+          <option value="base">find original</option>
+          <option value="markup">markup &amp; margin</option>
+          <option value="tax">reverse tax / vat</option>
+        </select>
         <button class="reset-btn" id="clearHistoryBtn" type="button">clear history</button>
         <div class="confirm-group hidden" id="clearHistoryConfirm">
           <span class="confirm-label">clear all saved history?</span>
@@ -305,7 +325,7 @@
     </div>
   </div>
 
-  <footer>Mohamed Sayed · Ahmed Emara · DeepSeek · ChatGPT · Antigravity · 2026 · <span id="appVersion">Desktop v2.1.1</span></footer>
+  <footer>Mohamed Sayed · Ahmed Emara · DeepSeek · ChatGPT · Antigravity · 2026 · <span id="appVersion">Desktop v2.2.0</span></footer>
 </div>
 
 <div class="modal-backdrop hidden" id="aboutModal" role="dialog" aria-modal="true" aria-labelledby="aboutModalTitle">
@@ -319,7 +339,7 @@
       <div class="about-icon-badge" aria-hidden="true">%</div>
       <div>
         <div class="about-app-name" id="aboutAppName">Percentage Calculator Tool</div>
-        <div class="about-version-pill" id="aboutVersionPill">Desktop v2.1.1 · Tauri v2 + Rust</div>
+        <div class="about-version-pill" id="aboutVersionPill">Desktop v2.2.0 · Tauri v2 + Rust</div>
       </div>
     </div>
 
@@ -346,7 +366,7 @@
         <span class="privacy-badge">● Zero Telemetry</span>
         <span class="privacy-badge">● Local Rust Engine</span>
       </div>
-      <p class="about-privacy-text" id="aboutPrivacyText">Fully offline. No tracking, no network calls. Calculation history is stored locally on this PC only and can be cleared anytime.</p>
+      <p class="about-privacy-text" id="aboutPrivacyText">All calculations run 100% locally in Rust with zero telemetry. History is stored only on this PC and can be cleared anytime. Optional GitHub Releases update checks can be toggled in Settings.</p>
     </div>
 
     <div class="about-box">
@@ -360,6 +380,34 @@
 
     <div class="modal-footer">
       <button class="calc-btn" id="closeAboutBtn" type="button">close [esc]</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop hidden" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle">
+  <div class="modal-card">
+    <div class="modal-header">
+      <div class="modal-title" id="settingsModalTitle">SETTINGS // PREFERENCES &amp; UPDATES</div>
+      <button class="modal-close-x" id="closeSettingsXBtn" type="button" aria-label="Close Settings dialog">[ × ]</button>
+    </div>
+
+    <div class="about-box">
+      <div class="about-box-title">UPDATES</div>
+      <label class="settings-toggle-row" for="autoUpdateToggle">
+        <input class="settings-checkbox" type="checkbox" id="autoUpdateToggle" checked>
+        <span>Check GitHub Releases automatically on startup</span>
+      </label>
+      <p class="about-privacy-text">Checks only the official GitHub Releases API when enabled or manually triggered. Disable anytime to stay 100% offline on launch.</p>
+      <div class="settings-actions-row">
+        <button class="calc-btn" id="checkUpdatesNowBtn" type="button">check for updates now</button>
+        <button class="utility-btn" id="openReleasePageBtn" type="button">open github releases</button>
+        <button class="copy-btn" id="copyReleaseUrlBtn" type="button">copy release link</button>
+      </div>
+      <div class="update-status-text" id="updateStatusText">Not checked yet in this session.</div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="calc-btn" id="closeSettingsBtn" type="button">close [esc]</button>
     </div>
   </div>
 </div>

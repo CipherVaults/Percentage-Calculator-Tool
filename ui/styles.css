@@ -100,6 +100,42 @@ body {
   border-left-color: #94C59A;
 }
 
+.calc-section.card-restored {
+  border-left-color: #94C59A;
+  background: #1b202d;
+  box-shadow: inset 0 0 0 1px rgba(148, 197, 154, 0.45);
+}
+
+.update-banner {
+  background: #161822;
+  border: 1px solid #3a3f4c;
+  border-left: 3px solid #94C59A;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.update-banner-text {
+  font-size: 0.78rem;
+  color: #eef2ff;
+}
+
+.update-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.update-action-btn {
+  padding: 0.34rem 0.75rem;
+  font-size: 0.7rem;
+}
+
 .calc-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -454,6 +490,68 @@ body {
 .history-row-actions .reset-btn {
   padding: 0.25rem 0.65rem;
   font-size: 0.66rem;
+}
+
+.history-filter {
+  background: #0E0F12;
+  border: 1px solid #3a3f4c;
+  color: #cbd5e6;
+  font-family: 'SF Mono', monospace;
+  font-size: 0.7rem;
+  padding: 0.38rem 0.65rem;
+  outline: none;
+  cursor: pointer;
+}
+
+.history-filter:focus {
+  border-color: #E9A715;
+}
+
+.history-delete-btn {
+  padding: 0.25rem 0.52rem !important;
+  color: #8f9aaf;
+}
+
+.history-delete-btn:hover {
+  border-color: #E9A715;
+  color: #E9A715;
+}
+
+.settings-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.78rem;
+  color: #eef2ff;
+  margin-bottom: 0.55rem;
+  cursor: pointer;
+}
+
+.settings-checkbox {
+  width: 15px;
+  height: 15px;
+  accent-color: #E9A715;
+  cursor: pointer;
+}
+
+.settings-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.85rem;
+}
+
+.update-status-text {
+  margin-top: 0.75rem;
+  font-size: 0.73rem;
+  color: #94C59A;
+  border-top: 1px solid #2a2d35;
+  padding-top: 0.65rem;
+}
+
+.update-status-text.is-error {
+  color: #E9A715;
 }
 
 /* Redesigned Dark Terminal About Modal */

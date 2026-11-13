@@ -5,7 +5,10 @@
 
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -18,17 +21,57 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 
-use crate::{HistoryState, SmokeState};
+use crate::{HistoryState, SettingsState, SmokeState};
 
 pub const HISTORY_MAX_ENTRIES: usize = 500;
 const HISTORY_MAX_FILE_BYTES: usize = 1024 * 1024;
+const SETTINGS_MAX_FILE_BYTES: usize = 4096;
 const MAX_FIELD_LEN: usize = 256;
 const MAX_COPY_LEN: usize = 4096;
 const ALLOWED_CALCULATORS: &[&str] = &[
     "change", "percent", "what", "discount", "base", "markup", "tax",
 ];
+pub const GITHUB_LATEST_RELEASE_API: &str =
+    "https://api.github.com/repos/CipherVaults/Percentage-Calculator-Tool/releases/latest";
+pub const GITHUB_RELEASES_URL: &str =
+    "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/latest";
+const GITHUB_RELEASES_PREFIX: &str =
+    "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/";
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct AppSettings {
+    #[serde(default = "default_true")]
+    pub check_updates_on_startup: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            check_updates_on_startup: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateCheckResult {
+    pub ok: bool,
+    pub update_available: bool,
+    pub current_version: String,
+    pub latest_version: Option<String>,
+    pub release_url: String,
+    pub published_at: Option<String>,
+    pub error: Option<String>,
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -79,7 +122,7 @@ pub fn build_app_info(app: &AppHandle) -> AppInfo {
         creators: &["Mohamed Sayed", "Ahmed Emara"],
         ai_builders: &["DeepSeek", "ChatGPT", "Antigravity"],
         credits: "Mohamed Sayed · Ahmed Emara · DeepSeek · ChatGPT · Antigravity",
-        privacy: "Fully offline. No tracking, no network calls. Calculation history is stored locally on this PC only and can be cleared anytime.",
+        privacy: "All calculations run 100% locally in Rust with zero telemetry. History is stored only on this PC and can be cleared anytime. Optional GitHub Releases update checks can be toggled in Settings.",
         history_limit: HISTORY_MAX_ENTRIES,
     }
 }
@@ -90,6 +133,14 @@ pub fn history_file_path(app: &AppHandle) -> Result<PathBuf, String> {
         .app_data_dir()
         .map_err(|err| format!("failed to resolve app data dir: {err}"))?;
     Ok(dir.join("history.json"))
+}
+
+pub fn settings_file_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|err| format!("failed to resolve app data dir: {err}"))?;
+    Ok(dir.join("settings.json"))
 }
 
 fn read_regular_file_limited(path: &Path, max_bytes: usize) -> Result<Vec<u8>, String> {
@@ -141,18 +192,22 @@ fn ensure_private_parent_dir(parent: &Path) -> Result<(), String> {
 fn write_atomic_private(path: &Path, data: &[u8]) -> Result<(), String> {
     let parent = path
         .parent()
-        .ok_or_else(|| "history path has no parent directory".to_string())?;
+        .ok_or_else(|| "file path has no parent directory".to_string())?;
     ensure_private_parent_dir(parent)?;
 
     if let Ok(existing) = std::fs::symlink_metadata(path) {
         if existing.file_type().is_symlink() || !existing.file_type().is_file() {
-            return Err("refusing to overwrite non-regular or symlinked history file".to_string());
+            return Err("refusing to overwrite non-regular or symlinked file".to_string());
         }
     }
 
     let pid = std::process::id();
     let seq = TEMP_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let tmp_name = format!("history.{pid}.{seq}.json.tmp");
+    let stem = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("data");
+    let tmp_name = format!("{stem}.{pid}.{seq}.tmp");
     let tmp_path = parent.join(tmp_name);
 
     let mut opts = OpenOptions::new();
@@ -165,13 +220,13 @@ fn write_atomic_private(path: &Path, data: &[u8]) -> Result<(), String> {
 
     let mut file = opts
         .open(&tmp_path)
-        .map_err(|err| format!("failed to create temporary history file: {err}"))?;
+        .map_err(|err| format!("failed to create temporary file: {err}"))?;
 
     let write_res = (|| -> Result<(), String> {
         file.write_all(data)
-            .map_err(|err| format!("failed to write temporary history file: {err}"))?;
+            .map_err(|err| format!("failed to write temporary file: {err}"))?;
         file.sync_all()
-            .map_err(|err| format!("failed to flush temporary history file: {err}"))?;
+            .map_err(|err| format!("failed to flush temporary file: {err}"))?;
         Ok(())
     })();
 
@@ -183,7 +238,7 @@ fn write_atomic_private(path: &Path, data: &[u8]) -> Result<(), String> {
 
     if let Err(err) = std::fs::rename(&tmp_path, path) {
         let _ = std::fs::remove_file(&tmp_path);
-        return Err(format!("failed to commit history file: {err}"));
+        return Err(format!("failed to commit file: {err}"));
     }
     Ok(())
 }
@@ -210,6 +265,89 @@ fn persist_history_to_disk(app: &AppHandle, entries: &[HistoryEntry]) -> Result<
     let data = serde_json::to_vec_pretty(entries)
         .map_err(|err| format!("failed to serialize history: {err}"))?;
     write_atomic_private(&path, &data)
+}
+
+pub fn load_settings_from_disk(app: &AppHandle) -> AppSettings {
+    let Ok(path) = settings_file_path(app) else {
+        return AppSettings::default();
+    };
+    let Ok(bytes) = read_regular_file_limited(&path, SETTINGS_MAX_FILE_BYTES) else {
+        return AppSettings::default();
+    };
+    serde_json::from_slice::<AppSettings>(&bytes).unwrap_or_default()
+}
+
+fn persist_settings_to_disk(app: &AppHandle, settings: &AppSettings) -> Result<(), String> {
+    let path = settings_file_path(app)?;
+    let data = serde_json::to_vec_pretty(settings)
+        .map_err(|err| format!("failed to serialize settings: {err}"))?;
+    write_atomic_private(&path, &data)
+}
+
+#[derive(Deserialize)]
+struct GitHubReleaseResponse {
+    tag_name: String,
+    #[serde(default)]
+    html_url: Option<String>,
+    #[serde(default)]
+    published_at: Option<String>,
+}
+
+pub fn parse_semver_triplet(version_or_tag: &str) -> Option<(u64, u64, u64)> {
+    let trimmed = version_or_tag.trim().trim_start_matches(['v', 'V']);
+    let core = trimmed.split(['-', '+']).next()?.trim();
+    let mut parts = core.split('.');
+    let major = parts.next()?.parse::<u64>().ok()?;
+    let minor = parts.next()?.parse::<u64>().ok()?;
+    let patch = parts.next()?.parse::<u64>().ok()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    Some((major, minor, patch))
+}
+
+pub fn is_newer_version(current: &str, candidate_tag: &str) -> bool {
+    match (
+        parse_semver_triplet(current),
+        parse_semver_triplet(candidate_tag),
+    ) {
+        (Some(cur), Some(cand)) => cand > cur,
+        _ => false,
+    }
+}
+
+pub fn parse_github_release_json(
+    current_version: &str,
+    bytes: &[u8],
+) -> Result<UpdateCheckResult, String> {
+    let parsed: GitHubReleaseResponse =
+        serde_json::from_slice(bytes).map_err(|err| format!("invalid release JSON: {err}"))?;
+    let (maj, min, patch) = parse_semver_triplet(&parsed.tag_name)
+        .ok_or_else(|| "invalid release tag format".to_string())?;
+    let latest_version = format!("{maj}.{min}.{patch}");
+    let release_url = parsed
+        .html_url
+        .filter(|u| u.starts_with(GITHUB_RELEASES_PREFIX) && u.len() <= MAX_FIELD_LEN)
+        .unwrap_or_else(|| GITHUB_RELEASES_URL.to_string());
+    let published_at = parsed
+        .published_at
+        .filter(|s| !s.trim().is_empty() && s.len() <= 64);
+
+    Ok(UpdateCheckResult {
+        ok: true,
+        update_available: is_newer_version(current_version, &parsed.tag_name),
+        current_version: current_version.to_string(),
+        latest_version: Some(latest_version),
+        release_url,
+        published_at,
+        error: None,
+    })
+}
+
+#[cfg(windows)]
+fn windows_system32_tool(name: &str) -> PathBuf {
+    let root = std::env::var_os("SystemRoot").unwrap_or_else(|| "C:\\Windows".into());
+    PathBuf::from(root).join("System32").join(name)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -394,6 +532,32 @@ pub fn history_add(
 }
 
 #[tauri::command]
+pub fn history_delete(
+    app: AppHandle,
+    state: State<'_, HistoryState>,
+    id: u64,
+) -> Result<Vec<HistoryEntry>, String> {
+    let mut entries = state
+        .entries
+        .lock()
+        .map_err(|_| "history lock poisoned".to_string())?;
+
+    let mut next_entries = entries.clone();
+    let prev_len = next_entries.len();
+    next_entries.retain(|entry| entry.id != id);
+    if next_entries.len() == prev_len {
+        return Ok(entries.clone());
+    }
+
+    if !state.in_memory_only {
+        persist_history_to_disk(&app, &next_entries)?;
+    }
+    *entries = next_entries.clone();
+
+    Ok(next_entries)
+}
+
+#[tauri::command]
 pub fn history_clear(
     app: AppHandle,
     state: State<'_, HistoryState>,
@@ -409,6 +573,166 @@ pub fn history_clear(
     entries.clear();
 
     Ok(Vec::new())
+}
+
+#[tauri::command]
+pub fn get_settings(state: State<'_, SettingsState>) -> Result<AppSettings, String> {
+    let settings = state
+        .settings
+        .lock()
+        .map_err(|_| "settings lock poisoned".to_string())?;
+    Ok(settings.clone())
+}
+
+#[tauri::command]
+pub fn set_settings(
+    app: AppHandle,
+    state: State<'_, SettingsState>,
+    settings: AppSettings,
+) -> Result<AppSettings, String> {
+    let mut guard = state
+        .settings
+        .lock()
+        .map_err(|_| "settings lock poisoned".to_string())?;
+
+    if !state.in_memory_only {
+        persist_settings_to_disk(&app, &settings)?;
+    }
+    *guard = settings.clone();
+
+    Ok(settings)
+}
+
+#[tauri::command]
+pub async fn check_for_updates(
+    app: AppHandle,
+    smoke: State<'_, SmokeState>,
+) -> Result<UpdateCheckResult, String> {
+    let current_version = app.package_info().version.to_string();
+    if smoke.enabled {
+        return Ok(UpdateCheckResult {
+            ok: true,
+            update_available: false,
+            current_version: current_version.clone(),
+            latest_version: Some(current_version),
+            release_url: GITHUB_RELEASES_URL.to_string(),
+            published_at: None,
+            error: None,
+        });
+    }
+
+    let version_for_ua = current_version.clone();
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        #[cfg(windows)]
+        let mut cmd = {
+            let mut c = Command::new(windows_system32_tool("curl.exe"));
+            c.creation_flags(CREATE_NO_WINDOW);
+            c
+        };
+        #[cfg(not(windows))]
+        let mut cmd = Command::new("curl");
+
+        let user_agent = format!("User-Agent: Percentage-Calculator-Tool/{version_for_ua}");
+        let output = cmd
+            .args([
+                "--silent",
+                "--show-error",
+                "--fail",
+                "--location",
+                "--max-time",
+                "8",
+                "--max-filesize",
+                "65536",
+                "--proto",
+                "=https",
+                "--tlsv1.2",
+                "-H",
+                "Accept: application/vnd.github+json",
+                "-H",
+                &user_agent,
+                GITHUB_LATEST_RELEASE_API,
+            ])
+            .output();
+
+        match output {
+            Ok(out) if out.status.success() => {
+                match parse_github_release_json(&version_for_ua, &out.stdout) {
+                    Ok(res) => res,
+                    Err(err) => UpdateCheckResult {
+                        ok: false,
+                        update_available: false,
+                        current_version: version_for_ua.clone(),
+                        latest_version: None,
+                        release_url: GITHUB_RELEASES_URL.to_string(),
+                        published_at: None,
+                        error: Some(err),
+                    },
+                }
+            }
+            Ok(out) => {
+                let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+                let msg = if stderr.is_empty() {
+                    format!("Update check failed (status {})", out.status)
+                } else {
+                    stderr
+                };
+                UpdateCheckResult {
+                    ok: false,
+                    update_available: false,
+                    current_version: version_for_ua.clone(),
+                    latest_version: None,
+                    release_url: GITHUB_RELEASES_URL.to_string(),
+                    published_at: None,
+                    error: Some(msg),
+                }
+            }
+            Err(err) => UpdateCheckResult {
+                ok: false,
+                update_available: false,
+                current_version: version_for_ua.clone(),
+                latest_version: None,
+                release_url: GITHUB_RELEASES_URL.to_string(),
+                published_at: None,
+                error: Some(format!("Failed to run update check: {err}")),
+            },
+        }
+    })
+    .await
+    .map_err(|err| format!("update task failed: {err}"))?;
+
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn open_release_page(smoke: State<'_, SmokeState>) -> Result<(), String> {
+    if smoke.enabled {
+        return Ok(());
+    }
+
+    #[cfg(windows)]
+    {
+        Command::new(windows_system32_tool("rundll32.exe"))
+            .args(["url.dll,FileProtocolHandler", GITHUB_RELEASES_URL])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+            .map_err(|err| format!("failed to open browser: {err}"))?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(GITHUB_RELEASES_URL)
+            .spawn()
+            .map_err(|err| format!("failed to open browser: {err}"))?;
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        Command::new("xdg-open")
+            .arg(GITHUB_RELEASES_URL)
+            .spawn()
+            .map_err(|err| format!("failed to open browser: {err}"))?;
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -529,5 +853,39 @@ mod tests {
         }
 
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn semver_comparison_and_release_json_parsing_work() {
+        assert_eq!(parse_semver_triplet("v2.1.1"), Some((2, 1, 1)));
+        assert_eq!(parse_semver_triplet("2.10.0-beta.1"), Some((2, 10, 0)));
+        assert_eq!(parse_semver_triplet("invalid"), None);
+
+        assert!(is_newer_version("2.1.1", "v2.2.0"));
+        assert!(is_newer_version("2.1.1", "v2.1.2"));
+        assert!(!is_newer_version("2.1.1", "v2.1.1"));
+        assert!(!is_newer_version("2.1.1", "v2.1.0"));
+
+        let payload = br#"{
+            "tag_name": "v2.2.0",
+            "html_url": "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.2.0",
+            "published_at": "2026-11-15T12:00:00Z"
+        }"#;
+        let parsed = parse_github_release_json("2.1.1", payload).unwrap();
+        assert!(parsed.ok);
+        assert!(parsed.update_available);
+        assert_eq!(parsed.latest_version.as_deref(), Some("2.2.0"));
+        assert_eq!(
+            parsed.release_url,
+            "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.2.0"
+        );
+
+        let untrusted_url_payload = br#"{
+            "tag_name": "v2.1.1",
+            "html_url": "https://evil.example.com/phish"
+        }"#;
+        let sanitized = parse_github_release_json("2.1.1", untrusted_url_payload).unwrap();
+        assert!(!sanitized.update_available);
+        assert_eq!(sanitized.release_url, GITHUB_RELEASES_URL);
     }
 }

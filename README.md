@@ -11,7 +11,7 @@
 <p align="center">
   <a href="https://ciphervaults.github.io/Percentage-Calculator-Tool/"><strong>Open Live Mobile &amp; Web App</strong></a>
   &nbsp;·&nbsp;
-  <a href="https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/latest"><strong>Download v2.1.1 Releases</strong></a>
+  <a href="https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/latest"><strong>Download v2.2.0 Releases</strong></a>
   &nbsp;·&nbsp;
   <a href="#security--privacy-hardening-v211"><strong>Security Hardening</strong></a>
   &nbsp;·&nbsp;
@@ -22,7 +22,7 @@
 >
 > Always verify you are opening `https://ciphervaults.github.io/Percentage-Calculator-Tool/` directly before installing to your Home Screen. For Windows desktop builds, offline `.exe` / `.msi` installers, standalone HTML, and `SHA256SUMS.txt`, see [**GitHub Releases**](https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/latest).
 
-This project started as a single-file HTML percentage utility, became a structured Electron desktop app in v1.1.0, was rebuilt on **Tauri v2 + Rust** in **v2.0.0**, expanded in **v2.1.0** with input swapping, Markup & Profit Margin, Reverse Tax/VAT, persistent local history, a dark-terminal About modal, and a Mobile/Web PWA, and was security-hardened across desktop, mobile, and CI/CD in **v2.1.1**.
+This project started as a single-file HTML percentage utility, became a structured Electron desktop app in v1.1.0, was rebuilt on **Tauri v2 + Rust** in **v2.0.0**, expanded in **v2.1.0** with input swapping, Markup & Profit Margin, Reverse Tax/VAT, persistent local history, a dark-terminal About modal, and a Mobile/Web PWA, was security-hardened in **v2.1.1**, and was refined in **v2.2.0** with formatted paste support, history filtering and single-item deletion, and a Settings-controlled GitHub Releases update checker.
 
 > Looking for the last Electron version? Check out the [`v1.1.0-electron`](https://github.com/CipherVaults/Percentage-Calculator-Tool/tree/v1.1.0-electron) tag.
 
@@ -41,7 +41,7 @@ This project started as a single-file HTML percentage utility, became a structur
 Made by **Mohamed Sayed · Ahmed Emara · DeepSeek · ChatGPT · Antigravity**.
 
 - **Creators:** Mohamed Sayed · Ahmed Emara
-- **AI Collaboration:** DeepSeek & ChatGPT (original HTML utility), Codex (v1.1 Electron packaging), and Antigravity (v2.0 Tauri + Rust rebuild, v2.1 feature expansion & mobile PWA, v2.1.1 security hardening).
+- **AI Collaboration:** DeepSeek & ChatGPT (original HTML utility), Codex (v1.1 Electron packaging), and Antigravity (v2.0 Tauri + Rust rebuild, v2.1 feature expansion & mobile PWA, v2.1.1 security hardening, v2.2.0 calculator/history polish & update checker).
 
 The repository remains intentionally transparent about that collaboration because the development record is part of the value of the project.
 
@@ -55,8 +55,8 @@ It is designed for quick local use rather than account-based or cloud-connected 
 
 - no login or user accounts
 - no telemetry, cookies, or tracking
-- zero runtime network calls during calculations (the Mobile & Web PWA works fully offline once cached)
-- local-only calculation history (desktop stores up to 500 entries in `%APPDATA%\com.percentagecalculator.tool\history.json`; Mobile & Web stores up to 500 entries on-device in `localStorage`, clearable anytime)
+- zero runtime network calls during calculations (the Mobile & Web PWA works fully offline once cached; optional GitHub Releases update checks can be toggled in Settings)
+- local-only calculation history & settings (desktop stores up to 500 entries in `%APPDATA%\com.percentagecalculator.tool\history.json` and update preferences in `settings.json`; Mobile & Web stores up to 500 entries and preferences on-device in `localStorage`, clearable anytime)
 
 The app is intentionally small. Its value is speed, clarity, and an inspectable, hardened codebase.
 
@@ -64,7 +64,7 @@ The app is intentionally small. Its value is speed, clarity, and an inspectable,
 
 ## Mobile & Web Edition (iPhone & Android)
 
-A zero-dependency single-file HTML + offline PWA edition of **v2.1.1** lives in `mobile/` and is deployed from `main` to GitHub Pages:
+A zero-dependency single-file HTML + offline PWA edition of **v2.2.0** lives in `mobile/` and is deployed from `main` to GitHub Pages:
 
 - **Official Web App URL:** **[https://ciphervaults.github.io/Percentage-Calculator-Tool/](https://ciphervaults.github.io/Percentage-Calculator-Tool/)**
   - **iPhone / iPad (Safari):** Open the link in **Safari** → tap **Share (`↑`)** → **Add to Home Screen** → **Add**.
@@ -90,12 +90,13 @@ Polish across Desktop & Mobile:
 
 - **quick-jump navigation bar** (`change`, `% of total`, `portion`, `discount`, `original`, `markup & margin`, `tax / vat`, `history`) right below the header for instant section scrolling
 - **`⇅ swap values` pill** between the two inputs on every calculator card
-- **persistent local history tape** (up to 500 entries, newest first, with one-click `copy`, `↺ restore` back into the calculator, and `clear history`)
+- **formatted paste & range safety** — accepts `$1,250.50`, `1,000`, `20%`, or `+$1,000`, parenthesizes negative operands (`(-50)`) in live formulas, blocks copying `"—"` or error messages, and displays unified `"Value out of range"` handling on overflow
+- **persistent local history tape** (up to 500 entries, newest first, with `YYYY-MM-DD HH:MM:SS` timestamps, calculator filter dropdown, `copy`, `↺ restore` with card highlight feedback, single-entry `×` delete, and `clear history`)
 - live calculation while typing (computed in Rust via Tauri IPC on desktop, matching JS engine in Mobile HTML across all 10,661 golden test cases)
 - Enter key support
 - copy-to-clipboard buttons with visible feedback
 - Clear All button (resets calculator inputs without wiping saved history)
-- **in-app dark terminal About modal** (`Esc` / backdrop / `[ × ]`) with one-click copy/open for the official Web App URL
+- **in-app dark terminal Settings & About modals** (`Esc` / backdrop / `[ × ]`) with startup GitHub Releases update checker toggle, manual update check & release notification banner, and one-click copy for the official Web App URL
 - Windows NSIS & MSI installers + standalone portable executable
 - standalone Mobile & Web PWA (`mobile/`) for iPhone Safari & Android Chrome
 
@@ -111,9 +112,9 @@ Following a full source security audit (**0 confirmed exploitable vulnerabilitie
   - Hardened `history.json` persistence in [`src-tauri/src/commands.rs`](src-tauri/src/commands.rs): symlink checks on read/write, a `1 MiB` read cap, shared load-time schema validation matching `history_add`, unique `history.<pid>.<seq>.json.tmp` atomic writes with Unix `0o700` dir / `0o600` file modes and `sync_all()`, lock-held commit-on-success mutations, and a `4096`-byte `copy_text` limit.
   - Replaced potential prototype/sink pitfalls in [`ui/main.js`](ui/main.js) with zero `innerHTML` usage, `Object.hasOwn` lookup guards, bounded field validation, and structured IPC error recovery.
 - **Mobile & Web PWA (`mobile/`):**
-  - Protected [`mobile/index.html`](mobile/index.html) with `<meta name="referrer" content="no-referrer">` and a strict `<meta http-equiv="Content-Security-Policy">` pinning exact Base64 SHA-256 hashes for the inline `<style>` and `<script>` blocks alongside `default-src 'none'`, `worker-src 'self'`, `img-src 'self' data:`, `manifest-src 'self'`, `connect-src 'self'`, `object-src 'none'`, `base-uri 'none'`, and `form-action 'none'` (zero inline `style.*` mutations).
-  - Hardened `localStorage` history loading with plain-object validation, `256`-character field caps, allowlisted calculator modes, `Object.hasOwn` lookup safety, clean empty resets when cleared/corrupted, and cross-tab `storage` synchronization.
-  - Hardened [`mobile/sw.js`](mobile/sw.js) (`pct-tool-v2.1.1-mobile-1`) with same-origin checks, registration scope-pathname prefix verification, and `!response.redirected`.
+  - Protected [`mobile/index.html`](mobile/index.html) with `<meta name="referrer" content="no-referrer">` and a strict `<meta http-equiv="Content-Security-Policy">` pinning exact Base64 SHA-256 hashes for the inline `<style>` and `<script>` blocks alongside `default-src 'none'`, `worker-src 'self'`, `img-src 'self' data:`, `manifest-src 'self'`, `connect-src 'self' https://api.github.com`, `object-src 'none'`, `base-uri 'none'`, and `form-action 'none'` (zero inline `style.*` mutations).
+  - Hardened `localStorage` history & settings loading with plain-object validation, `256`-character field caps, allowlisted calculator modes, `Object.hasOwn` lookup safety, clean empty resets when cleared/corrupted, and cross-tab `storage` synchronization.
+  - Hardened [`mobile/sw.js`](mobile/sw.js) (`pct-tool-v2.2.0-mobile-1`) with same-origin checks, registration scope-pathname prefix verification, and `!response.redirected`.
 - **Supply Chain & Release Integrity (`.github/workflows/`, `.gitattributes`):**
   - Pinned all GitHub Actions in [`build.yml`](.github/workflows/build.yml) and [`pages.yml`](.github/workflows/pages.yml) to immutable 40-character commit SHAs with `persist-credentials: false`.
   - Split unprivileged build jobs (`contents: read`) from `main`/tag-only release publishing (`contents: write`), enforced `--locked` Rust builds, automated 10k parity + SHA-256 CSP digest verification + DOM/eval sink checks on Linux, Windows, and GitHub Pages deploys (`refs/heads/main` only), pinned LF line endings in `.gitattributes`, and generated `SHA256SUMS.txt` on every release.
@@ -127,7 +128,7 @@ Following a full source security audit (**0 confirmed exploitable vulnerabilitie
 
 ## Current Version
 
-Desktop & Mobile **v2.1.1** (Tauri v2 + Rust / Standalone Mobile PWA)
+Desktop & Mobile **v2.2.0** (Tauri v2 + Rust / Standalone Mobile PWA)
 
 ---
 
@@ -192,7 +193,7 @@ Unit tests (math + storage/validation) and the 10,661-case v1.1 golden parity su
 cargo test --workspace --locked
 ```
 
-End-to-end desktop smoke test (launches the real Tauri app in hidden mode and verifies focus, all seven calculators, input swapping, Markup & Margin, Reverse Tax/VAT add & extract, persistent history add/restore/clear, divide-by-zero handling, dark About modal & Web App link copy, copy feedback, Clear All, version `2.1.1`, and the system clipboard):
+End-to-end desktop smoke test (launches the real Tauri app in hidden mode and verifies focus, all seven calculators, input swapping, Markup & Margin, Reverse Tax/VAT add & extract, negative formula parentheses, paste sanitization, overflow handling, error copy blocking, persistent history add/filter/restore/delete/clear, dark About & Settings modals, mocked startup/manual update check, copy feedback, Clear All, version `2.2.0`, and the system clipboard):
 
 ```powershell
 cargo run -p percentage-calculator-tool -- --smoke-test
@@ -208,22 +209,22 @@ cargo tauri build -- --locked
 
 Local outputs under `target/release/`:
 
-- `bundle/nsis/Percentage Calculator Tool_2.1.1_x64-setup.exe` — NSIS installer
-- `bundle/msi/Percentage Calculator Tool_2.1.1_x64_en-US.msi` — MSI installer
+- `bundle/nsis/Percentage Calculator Tool_2.2.0_x64-setup.exe` — NSIS installer
+- `bundle/msi/Percentage Calculator Tool_2.2.0_x64_en-US.msi` — MSI installer
 - `percentage-calculator-tool.exe` — standalone portable executable (uses the system WebView2 runtime)
 
 Every push to `main`, pull request, and `v*` tag builds on GitHub Actions (`windows-latest`), and releases on `main` / `v*` tags attach the installers, portable `.exe`, standalone Mobile HTML, and `SHA256SUMS.txt` (GitHub replaces spaces with dots in uploaded release filenames):
 
-- `Percentage.Calculator.Tool_2.1.1_x64-setup.exe`
-- `Percentage.Calculator.Tool_2.1.1_x64_en-US.msi`
-- `Percentage.Calculator.Tool.Portable.2.1.1.exe`
-- `Percentage.Calculator.Tool.Mobile.2.1.1.html`
+- `Percentage.Calculator.Tool_2.2.0_x64-setup.exe`
+- `Percentage.Calculator.Tool_2.2.0_x64_en-US.msi`
+- `Percentage.Calculator.Tool.Portable.2.2.0.exe`
+- `Percentage.Calculator.Tool.Mobile.2.2.0.html`
 - `SHA256SUMS.txt`
 
 Verify any downloaded file in PowerShell before opening:
 
 ```powershell
-Get-FileHash .\Percentage.Calculator.Tool.Portable.2.1.1.exe -Algorithm SHA256
+Get-FileHash .\Percentage.Calculator.Tool.Portable.2.2.0.exe -Algorithm SHA256
 # Compare the lowercase hash against the matching line in SHA256SUMS.txt
 ```
 

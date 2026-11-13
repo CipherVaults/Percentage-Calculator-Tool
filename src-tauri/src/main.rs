@@ -19,6 +19,11 @@ pub struct HistoryState {
     pub next_id: Mutex<u64>,
 }
 
+pub struct SettingsState {
+    pub in_memory_only: bool,
+    pub settings: Mutex<commands::AppSettings>,
+}
+
 fn main() {
     let smoke_enabled = std::env::args().any(|arg| arg == "--smoke-test");
 
@@ -46,6 +51,16 @@ fn main() {
                 next_id: Mutex::new(next_id),
             });
 
+            let initial_settings = if smoke_enabled {
+                commands::AppSettings::default()
+            } else {
+                commands::load_settings_from_disk(app.handle())
+            };
+            app.manage(SettingsState {
+                in_memory_only: smoke_enabled,
+                settings: Mutex::new(initial_settings),
+            });
+
             if smoke_enabled {
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.hide();
@@ -70,7 +85,12 @@ fn main() {
             commands::calc_tax,
             commands::history_list,
             commands::history_add,
+            commands::history_delete,
             commands::history_clear,
+            commands::get_settings,
+            commands::set_settings,
+            commands::check_for_updates,
+            commands::open_release_page,
             commands::copy_text,
             commands::get_app_info,
             commands::is_smoke_test,

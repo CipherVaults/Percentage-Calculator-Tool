@@ -49,6 +49,7 @@ In **v1.0–v1.1** the desktop shell used Electron. In **v2.0.0** the app was re
 - Windows native title bar
 - offline local webview UI (`ui/`) with strict CSP (`connect-src 'none'`, `object-src 'none'`, `base-uri 'none'`, `form-action 'none'`, `frame-ancestors 'none'`) and zero unused Tauri capability permissions (`permissions: []`)
 - seven percentage, pricing, and tax calculators implemented in Rust (`crates/percent-core`)
+- top quick-jump navigation bar (`change`, `% of total`, `portion`, `discount`, `original`, `markup & margin`, `tax / vat`, `history`) matching the Mobile & Web PWA
 - `⇅ swap values` pill between the two input fields in every card
 - hardened persistent local calculation history (up to 500 entries stored at `%APPDATA%\com.percentagecalculator.tool\history.json` with symlink checks, 1 MiB read cap, load-time validation, atomic unique `.json.tmp` commits, and `copy` / `↺ restore` / `clear history`)
 - live formula previews

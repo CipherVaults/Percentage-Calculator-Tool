@@ -94,7 +94,7 @@ ui/main.js
 
 It remains plain HTML, CSS, and JavaScript with **no bundler, no npm dependencies, and zero `innerHTML` usage**:
 
-- `index.html` and `styles.css` preserve the v1.1 terminal color palette while adding `<meta name="referrer" content="no-referrer">`, `⇅ swap values` pills, the Markup & Margin and Reverse Tax/VAT cards, the bottom History tape, and the custom dark-terminal About modal (featuring the official Web App URL and copy button).
+- `index.html` and `styles.css` preserve the v1.1 terminal color palette while adding `<meta name="referrer" content="no-referrer">`, the 8-pill `.quick-nav` bar with smooth section scrolling, `⇅ swap values` pills, the Markup & Margin and Reverse Tax/VAT cards, the bottom History tape, and the custom dark-terminal About modal (featuring the official Web App URL and copy button).
 - `main.js` parses input strings with the same `parseFloat` logic as v1.1, calls the Rust commands via `invoke(...)` inside structured `try/catch` guards, enforces `256`-character history field bounds and `Object.hasOwn` lookup safety, and uses per-section sequence counters so out-of-order async replies can never overwrite newer input.
 
 ---

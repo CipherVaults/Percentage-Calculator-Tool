@@ -116,6 +116,16 @@ The app keeps the exact look, feel, and results of v1.1 while shipping as a smal
 
 ---
 
+## Phase 11 - Calculator Polish, History Upgrades & Update Checker (v2.2.0)
+**Status: Completed**
+
+- continued local Windows development on `handoff-local-dev` after migrating from Antigravity Cloud Agents
+- added formatted numeric paste & input sanitization (`$1,250.50`, `1,000`, `20%`, `+$1,000`), parenthesized negative formula previews (`(-50)`), unified `Infinity` / `"Value out of range"` range checks across Desktop & Mobile, and card `copy` guards blocking placeholder (`"—"`) and error states while copying structured `copyText`
+- upgraded the History tape on Desktop and Mobile with `YYYY-MM-DD HH:MM:SS` timestamps, a `#historyFilter` calculator dropdown preserving the total saved `(N / 500)` counter, single-entry `×` removal (`history_delete` / `deleteHistoryEntry`), and smooth scroll + `.card-restored` highlight flash on `↺ restore`
+- added dark-terminal Settings & Update Banner UI across Desktop and Mobile with persistent `checkUpdatesOnStartup` (`settings.json` / `pct_tool_settings_v1`), Desktop Rust `System32\curl.exe` + `System32\rundll32.exe` update checking (keeping WebView CSP `connect-src 'none'`), Mobile CSP update (`connect-src 'self' https://api.github.com`) with refreshed SHA-256 hashes and `pct-tool-v2.2.0-mobile-1` Service Worker cache, plus semver/JSON unit tests and expanded `--smoke-test` coverage
+
+---
+
 ## Optional Future Work
 
 Future improvements can include:
@@ -124,5 +134,4 @@ Future improvements can include:
 - compact mode that hides formula panels
 - paid Windows Authenticode code signing (to remove the SmartScreen "unknown publisher" prompt)
 - macOS and Linux release bundles in the GitHub Actions matrix
-- auto-update support
 - GitHub Repository Settings hardening (enforce SHA-only Actions allowlist in `Settings -> Actions -> General` and `main`-only deployment rule on the `github-pages` environment)

@@ -43,24 +43,24 @@ In **v1.0–v1.1** the desktop shell used Electron. In **v2.0.0** the app was re
 
 ## Final Scope Definition
 
-### Included in the Current Version (v2.1.1)
+### Included in the Current Version (v2.2.0)
 
 - Tauri v2 + Rust desktop app
 - Windows native title bar
 - offline local webview UI (`ui/`) with strict CSP (`connect-src 'none'`, `object-src 'none'`, `base-uri 'none'`, `form-action 'none'`, `frame-ancestors 'none'`) and zero unused Tauri capability permissions (`permissions: []`)
-- seven percentage, pricing, and tax calculators implemented in Rust (`crates/percent-core`)
+- seven percentage, pricing, and tax calculators implemented in Rust (`crates/percent-core`) with formatted input/paste sanitization (`$1,250.50`, `1,000`, `20%`), parenthesized negative formula previews (`(-50)`), unified range overflow guards, and error-state copy protection
 - top quick-jump navigation bar (`change`, `% of total`, `portion`, `discount`, `original`, `markup & margin`, `tax / vat`, `history`) matching the Mobile & Web PWA
 - `⇅ swap values` pill between the two input fields in every card
-- hardened persistent local calculation history (up to 500 entries stored at `%APPDATA%\com.percentagecalculator.tool\history.json` with symlink checks, 1 MiB read cap, load-time validation, atomic unique `.json.tmp` commits, and `copy` / `↺ restore` / `clear history`)
+- hardened persistent local calculation history (up to 500 entries stored at `%APPDATA%\com.percentagecalculator.tool\history.json` with symlink checks, 1 MiB read cap, load-time validation, atomic unique `.json.tmp` commits, `YYYY-MM-DD HH:MM:SS` timestamps, calculator filter dropdown, `copy`, `↺ restore` with card highlight feedback, single-entry `×` delete via `history_delete`, and `clear history`)
 - live formula previews
 - copy-to-clipboard buttons with visible feedback (bounded 4 KiB IPC write)
 - Clear All button
-- redesigned in-app dark terminal About modal crediting **Mohamed Sayed · Ahmed Emara · DeepSeek · ChatGPT · Antigravity** and displaying the official Web App URL (`https://ciphervaults.github.io/Percentage-Calculator-Tool/`)
-- Rust unit tests (including storage/validation tests) + 10,661-case golden parity suite against v1.1 JS math
+- redesigned in-app dark terminal About & Settings modals crediting **Mohamed Sayed · Ahmed Emara · DeepSeek · ChatGPT · Antigravity**, displaying the official Web App URL (`https://ciphervaults.github.io/Percentage-Calculator-Tool/`), and offering a persistent `checkUpdatesOnStartup` toggle (`settings.json` / `pct_tool_settings_v1`), manual update check against GitHub Releases, and top update banner with links
+- Rust unit tests (including storage/validation and semver/release parsing tests) + 10,661-case golden parity suite against v1.1 JS math
 - real-window Tauri smoke test (`--smoke-test`)
 - Windows NSIS and MSI installer builds
 - Windows standalone portable executable
-- hardened standalone single-file Mobile & Web PWA HTML edition (`mobile/`) deployed at `https://ciphervaults.github.io/Percentage-Calculator-Tool/` for iPhone Safari (Add to Home Screen) and Android Chrome (Install app), protected by a SHA-256 hash CSP `<meta>` tag, scope-checked offline Service Worker, and schema-validated `localStorage`
+- hardened standalone single-file Mobile & Web PWA HTML edition (`mobile/`) deployed at `https://ciphervaults.github.io/Percentage-Calculator-Tool/` for iPhone Safari (Add to Home Screen) and Android Chrome (Install app), protected by a SHA-256 hash CSP `<meta>` tag, scope-checked offline Service Worker (`pct-tool-v2.2.0-mobile-1`), and schema-validated `localStorage`
 - SHA-pinned GitHub Actions CI/CD workflows for automated Windows builds, verification, `SHA256SUMS.txt` release checksums, and main-only GitHub Pages deployment
 - project documentation modeled after the AI Ambassadors documentation structure
 
@@ -91,8 +91,8 @@ The project intentionally does not include:
 - telemetry
 - analytics
 - external database servers (desktop stores a single local JSON history file in app data; mobile/web stores up to 500 entries locally in `localStorage`)
-- runtime network calls
-- auto-updater
+- runtime calculation network calls (optional update checks query only the public GitHub Releases API and can be disabled in Settings)
+- silent binary auto-installation or background replacement (updates notify in-app with links to GitHub Releases)
 - paid code signing
 - custom Discord-style title bar
 - complex theming system
@@ -136,7 +136,7 @@ The project is considered successful if:
 
 ## Current Final State
 
-At the **v2.1.1** stage, the project is:
+At the **v2.2.0** stage, the project is:
 
 - implemented as a Cargo workspace (`percent-core` + `src-tauri`) with a static `ui/` frontend and a hardened standalone `mobile/` PWA live at `https://ciphervaults.github.io/Percentage-Calculator-Tool/`
 - tested with Rust unit tests, 10,661 golden parity cases (Rust & Mobile HTML), automated DOM/CSP verification, and an expanded live desktop smoke test

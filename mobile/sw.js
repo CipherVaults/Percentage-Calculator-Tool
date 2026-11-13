@@ -1,4 +1,4 @@
-const CACHE_NAME = "pct-tool-v2.1.1-mobile-1";
+const CACHE_NAME = "pct-tool-v2.2.0-mobile-1";
 const PRECACHE_URLS = [
   "./",
   "./index.html",

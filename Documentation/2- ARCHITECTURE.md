@@ -2,16 +2,16 @@
 
 ## Overview
 
-Percentage Calculator Tool Desktop **v2.1.1** is a **Tauri v2 + Rust** desktop application paired with a hardened single-file **Mobile & Web PWA**.
+Percentage Calculator Tool Desktop **v2.2.0** is a **Tauri v2 + Rust** desktop application paired with a hardened single-file **Mobile & Web PWA**.
 
 It replaces the v1.1 Electron runtime while keeping the terminal-inspired HTML/CSS interface and exact calculation behavior intact.
 
 ```text
 +---------------------------------------------------------------+
 | Webview UI (ui/index.html, ui/styles.css, ui/main.js)         |
-|  - terminal-inspired layout + dark in-app About modal         |
-|  - input parsing (parseFloat), swap buttons & sequence guards |
-|  - live formula, result & persistent history DOM updates      |
+|  - terminal-inspired layout + dark About & Settings modals    |
+|  - formatted paste sanitizer, swap buttons & sequence guards  |
+|  - live formula, result & filterable history DOM updates      |
 +-------------------------------+-------------------------------+
                                 |
                                 | window.__TAURI__.core.invoke(...)
@@ -22,8 +22,9 @@ It replaces the v1.1 Electron runtime while keeping the terminal-inspired HTML/C
 |  - calc_change / calc_percent_of_total / calc_portion /       |
 |    calc_discount / calc_original / calc_markup_margin /       |
 |    calc_tax                                                   |
-|  - history_list / history_add / history_clear (500 FIFO cap)  |
-|  - copy_text (<=4 KiB), get_app_info                          |
+|  - history_list / history_add / history_delete / history_clear|
+|  - get_settings / set_settings / check_for_updates /          |
+|    open_release_page / copy_text (<=4 KiB), get_app_info      |
 |  - --smoke-test mode & 20s watchdog                           |
 +---------------+-------------------------------+---------------+
                 |                               |
@@ -31,10 +32,10 @@ It replaces the v1.1 Electron runtime while keeping the terminal-inspired HTML/C
 +-------------------------------+ +-----------------------------+
 | Pure Rust Math Crate          | | Local Storage & Plugins     |
 | (crates/percent-core)         | | - clipboard-manager plugin  |
-| - js_round & format_decimal   | | - hardened history.json I/O |
-| - 7 calculators               | |   in app_data_dir()         |
-| - unit + 10k golden tests     | +-----------------------------+
-+-------------------------------+
+| - js_round & format_decimal   | | - hardened history.json &   |
+| - 7 calculators               | |   settings.json I/O + curl  |
+| - unit + 10k golden tests     | |   update check (no WebView) |
++-------------------------------+ +-----------------------------+
 ```
 
 ---
@@ -75,8 +76,8 @@ It is responsible for:
 
 - creating the native window (1120×860, min 760×620, background `#0E0F12`)
 - serving the static frontend from `../ui`
-- exposing typed `#[tauri::command]` handlers for the seven calculators, persistent history (`history_list`, `history_add`, `history_clear`), clipboard writes (`copy_text`, bounded at `4096` bytes), and app metadata (`get_app_info`)
-- persisting up to 500 validated history entries atomically in `app_data_dir()/history.json`: symlink checks, `1 MiB` capped reads, shared schema validation on disk load matching `history_add`, unique `history.<pid>.<seq>.json.tmp` commits with `sync_all()` (Unix `0o700` dir / `0o600` files), lock-held commit-on-success updates, and an isolated in-memory store during `--smoke-test`
+- exposing typed `#[tauri::command]` handlers for the seven calculators, persistent history (`history_list`, `history_add`, `history_delete`, `history_clear`), persistent update settings & GitHub Releases checks (`get_settings`, `set_settings`, `check_for_updates` via Windows `System32\curl.exe` without changing webview `connect-src 'none'`, `open_release_page` via `System32\rundll32.exe`), clipboard writes (`copy_text`, bounded at `4096` bytes), and app metadata (`get_app_info`)
+- persisting up to 500 validated history entries and `settings.json` atomically in `app_data_dir()`: symlink checks, `1 MiB` capped reads, shared schema validation on disk load matching `history_add`, unique `<stem>.<pid>.<seq>.tmp` atomic commits with `sync_all()` (Unix `0o700` dir / `0o600` files), lock-held commit-on-success updates, and isolated in-memory stores during `--smoke-test`
 - enforcing a strict Content Security Policy (`default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`) and an empty desktop capability permission list (`permissions: []`) since all UI IPC routes exclusively through custom Rust commands
 - running the automated `--smoke-test` when passed on the command line
 
@@ -94,8 +95,8 @@ ui/main.js
 
 It remains plain HTML, CSS, and JavaScript with **no bundler, no npm dependencies, and zero `innerHTML` usage**:
 
-- `index.html` and `styles.css` preserve the v1.1 terminal color palette while adding `<meta name="referrer" content="no-referrer">`, the 8-pill `.quick-nav` bar with smooth section scrolling, `⇅ swap values` pills, the Markup & Margin and Reverse Tax/VAT cards, the bottom History tape, and the custom dark-terminal About modal (featuring the official Web App URL and copy button).
-- `main.js` parses input strings with the same `parseFloat` logic as v1.1, calls the Rust commands via `invoke(...)` inside structured `try/catch` guards, enforces `256`-character history field bounds and `Object.hasOwn` lookup safety, and uses per-section sequence counters so out-of-order async replies can never overwrite newer input.
+- `index.html` and `styles.css` preserve the v1.1 terminal color palette while adding `<meta name="referrer" content="no-referrer">`, the 8-pill `.quick-nav` bar with smooth section scrolling, top `#updateBanner`, `⇅ swap values` pills, the Markup & Margin and Reverse Tax/VAT cards, the filterable bottom History tape (`YYYY-MM-DD HH:MM:SS` timestamps and single-entry `×` delete), and dark-terminal About & Settings modals.
+- `main.js` sanitizes formatted numeric inputs/pastes (`$1,250.50`, `1,000`, `20%`), parenthesizes negative operands in live formulas, blocks copying error/placeholder states, calls Rust commands via `invoke(...)` inside structured `try/catch` guards with finite range checks (`"Value out of range"`), enforces `256`-character history field bounds and `Object.hasOwn` lookup safety, and uses per-section sequence counters so out-of-order async replies can never overwrite newer input.
 
 ---
 
@@ -105,7 +106,7 @@ The project uses three levels of automated verification:
 
 1. **Unit tests** (`crates/percent-core/src/lib.rs`, `src-tauri/src/commands.rs`) — direct ports of the original Vitest cases, JS rounding edge cases, Markup & Margin tests, Tax/VAT add & extract tests, shared history schema validation, symlink rejection, `1 MiB` read caps, and atomic writes.
 2. **Golden parity test** (`crates/percent-core/tests/golden_parity.rs` + Node CI verification) — 10,661 cases recorded from the v1.1 JS engine (`crates/percent-core/tests/fixtures/golden.json`) verified against both `percent-core` and `mobile/index.html`, plus automated `<meta>` CSP SHA-256 hash verification and forbidden DOM/eval sink checks across `ui/` and `mobile/`.
-3. **Real-window smoke test** (`percentage-calculator-tool --smoke-test`) — boots the actual Tauri app in hidden mode, drives the DOM inside the webview across all 40+ checks (focus, live calculations, input swapping, Markup & Margin, Reverse Tax/VAT add & extract, persistent history add/restore/clear, dark About modal + Web App link copy, copy feedback, Clear All, version `2.1.1`, and real system clipboard write/read), and exits `0` or `1`.
+3. **Real-window smoke test** (`percentage-calculator-tool --smoke-test`) — boots the actual Tauri app in hidden mode, drives the DOM inside the webview across all 45+ checks (focus, live calculations, input swapping, Markup & Margin, Reverse Tax/VAT add & extract, negative formula parentheses, paste sanitization, overflow handling, error copy blocking, persistent history add/filter/restore/delete/clear, dark About & Settings modals, mocked update check, copy feedback, Clear All, version `2.2.0`, and real system clipboard write/read), and exits `0` or `1`.
 
 ---
 
@@ -125,12 +126,12 @@ On every push and pull request, GitHub Actions (with all Actions pinned to immut
 
 ### 6. Mobile & Web Standalone PWA (`mobile/`)
 
-To run **v2.1.1** live at `https://ciphervaults.github.io/Percentage-Calculator-Tool/` on iPhone (Safari → Add to Home Screen) and Android (Chrome → Install app) or as a standalone single HTML file:
+To run **v2.2.0** live at `https://ciphervaults.github.io/Percentage-Calculator-Tool/` on iPhone (Safari → Add to Home Screen) and Android (Chrome → Install app) or as a standalone single HTML file:
 
 - `mobile/index.html` bundles all CSS, JavaScript, and the fallback icon inline, matching `percent-core` math across all 10,661 golden test cases.
-- Protected by `<meta name="referrer" content="no-referrer">` and a strict `<meta http-equiv="Content-Security-Policy">` pinning exact Base64 SHA-256 digests of the inline `<style>` and `<script>` blocks alongside `default-src 'none'`, `worker-src 'self'`, `img-src 'self' data:`, `manifest-src 'self'`, `connect-src 'self'`, `object-src 'none'`, `base-uri 'none'`, and `form-action 'none'` (zero inline `style.*` mutations in JavaScript).
-- Safe-area viewport insets (`viewport-fit=cover`, `env(safe-area-inset-*)`), `16px` mobile inputs (preventing iOS Safari focus zoom), quick-jump navigation pills, and hardened `localStorage` persistence (500-entry FIFO history with `256`-character field bounds, schema validation, `Object.hasOwn` lookup guards, and cross-tab `storage` sync) adapt the terminal UI cleanly for touch screens.
-- `mobile/manifest.webmanifest`, `mobile/sw.js` (`pct-tool-v2.1.1-mobile-1`, enforcing same-origin, scope-pathname prefix checks, and `!response.redirected`), and `mobile/icons/` (`180x180` Apple touch icon, `192x192`, `512x512`, and `maskable` adaptive Android icon) enable Home Screen installation and full offline execution.
+- Protected by `<meta name="referrer" content="no-referrer">` and a strict `<meta http-equiv="Content-Security-Policy">` pinning exact Base64 SHA-256 digests of the inline `<style>` and `<script>` blocks alongside `default-src 'none'`, `worker-src 'self'`, `img-src 'self' data:`, `manifest-src 'self'`, `connect-src 'self' https://api.github.com`, `object-src 'none'`, `base-uri 'none'`, and `form-action 'none'` (zero inline `style.*` mutations in JavaScript).
+- Safe-area viewport insets (`viewport-fit=cover`, `env(safe-area-inset-*)`), `16px` mobile inputs (preventing iOS Safari focus zoom), quick-jump navigation pills, formatted paste sanitization, update notification banner & Settings (`pct_tool_settings_v1`), and hardened `localStorage` persistence (500-entry FIFO history with `256`-character field bounds, schema validation, calculator filtering, single-entry delete, `Object.hasOwn` lookup guards, and cross-tab `storage` sync) adapt the terminal UI cleanly for touch screens.
+- `mobile/manifest.webmanifest`, `mobile/sw.js` (`pct-tool-v2.2.0-mobile-1`, enforcing same-origin, scope-pathname prefix checks, and `!response.redirected`), and `mobile/icons/` (`180x180` Apple touch icon, `192x192`, `512x512`, and `maskable` adaptive Android icon) enable Home Screen installation and full offline execution.
 
 ---
 

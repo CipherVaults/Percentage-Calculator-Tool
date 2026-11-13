@@ -1553,7 +1553,7 @@ async function runSmokeTestIfRequested(smokeEnabledArg) {
 
     const appInfo = await invoke("get_app_info");
     check("app-name", appInfo.name === "Percentage Calculator Tool");
-    check("app-version", appInfo.version === "2.1.1");
+    check("app-version", appInfo.version === "2.2.0");
     check(
       "app-credits",
       appInfo.credits.includes("Mohamed Sayed") &&
@@ -1564,7 +1564,7 @@ async function runSmokeTestIfRequested(smokeEnabledArg) {
       "footer-version",
       document
         .getElementById("appVersion")
-        .textContent.includes("Desktop v2.1.1")
+        .textContent.includes("Desktop v2.2.0")
     );
 
     const quickLinks = Array.from(document.querySelectorAll(".quick-nav .quick-link"));

@@ -415,3 +415,20 @@ Perform a comprehensive source security audit of the entire codebase (Tauri v2 d
 3. **Desktop & Mobile Frontends (`ui/`, `mobile/`)** — added `<meta http-equiv="Content-Security-Policy">` with exact SHA-256 hashes of inline `<style>` and `<script>` inside `mobile/index.html`, `<meta name="referrer" content="no-referrer">`, schema-validated `localStorage` (`256`-char field caps, clean reset on storage clear, cross-tab `storage` listener), `Object.hasOwn` guards, `.clipboard-scratch` class replacing inline styles, IPC error recovery, scope-pathname + `!response.redirected` checks in `mobile/sw.js` (`pct-tool-v2.1.1-mobile-1`), and the official Web App URL & copy button inside both About modals.
 4. **CI/CD Supply Chain & Checksums (`.github/workflows/`, `.gitattributes`, `.gitignore`)** — pinned all Actions to 40-char commit SHAs with `persist-credentials: false`, enforced `--locked` Rust builds, split unprivileged `windows-build` (`contents: read`) from `main`/tag-only `release` (`contents: write`), added Node 10k parity + CSP SHA-256 + sink checks before build and Pages deploy, enforced LF endings on web assets, and added `dist/SHA256SUMS.txt` alongside release installers and standalone mobile HTML.
 5. **Desktop Quick-Jump Bar & `v2.1.1` Re-Release (`ui/`, `.github/workflows/build.yml`)** — added the 8-pill `.quick-nav` bar (`change`, `% of total`, `portion`, `discount`, `original`, `markup & margin`, `tax / vat`, `history`) to the Windows Desktop UI (`ui/index.html`, `ui/styles.css`, and `--smoke-test` in `ui/main.js`) for parity with the Mobile & Web PWA, and updated `build.yml` so existing-tag `v2.1.1` re-releases cleanly advance the `v2.1.1` tag ref, refresh release notes, and overwrite assets/`SHA256SUMS.txt`.
+
+---
+
+## Session: November 13th, 2026 - v2.2.0 Calculator Polish, History Upgrades & Update Checker (Local Windows Development)
+
+---
+
+### Goal
+
+Continue development locally on Windows (`handoff-local-dev`), validate the local toolchain and release installer builds, implement three user-selected quality-of-life upgrades across Desktop and Mobile, bump the release version to **v2.2.0**, rebuild/test locally, and open a Pull Request to `main`.
+
+### What Was Delivered in v2.2.0
+
+1. **Calculator & Copy Polish (`ui/`, `mobile/`)** — blocked copying `"—"` and error messages across all 7 card `copy` buttons while copying structured `copyText`, parenthesized negative operands (`(-50)`) in live formula previews, added `$1,250.50` / `1,000` / `20%` numeric paste & input sanitization across all 14 inputs, and aligned `"Value out of range"` guards on `Infinity` overflow across Desktop and Mobile without changing the 10,661 golden parity cases.
+2. **History Tape Upgrades (`src-tauri/`, `ui/`, `mobile/`)** — upgraded timestamps to local `YYYY-MM-DD HH:MM:SS`, added a `#historyFilter` calculator filter dropdown while keeping total saved `(N / 500)`, added single-entry `×` deletion (`history_delete` / `deleteHistoryEntry`), and added smooth scrolling + `.card-restored` highlight feedback on `↺ restore`.
+3. **Settings & Startup Update Checker (`src-tauri/`, `ui/`, `mobile/`)** — added a `settings` button, dark-terminal `#settingsModal`, and top `#updateBanner` (`open release page`, `copy link`, `dismiss`), backed by atomic `settings.json` on Desktop (via `System32\curl.exe` + `System32\rundll32.exe`, keeping WebView CSP `connect-src 'none'`) and `pct_tool_settings_v1` + `connect-src 'self' https://api.github.com` in `mobile/index.html` (`pct-tool-v2.2.0-mobile-1`).
+4. **Version Bump, Documentation & Release Prep (`2.2.0`)** — updated workspace manifests (`2.2.0`), `ui/`, `mobile/`, `README.md`, `Documentation/`, and `.github/release-notes-v2.2.0.md`, verified all Rust, 10,661-case Mobile parity/CSP, and `--smoke-test` checks, built & verified the local `v2.2.0` NSIS/MSI/portable artifacts, and prepared the PR from `handoff-local-dev` to `main`.

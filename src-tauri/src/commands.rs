@@ -122,7 +122,7 @@ pub fn build_app_info(app: &AppHandle) -> AppInfo {
         creators: &["Mohamed Sayed", "Ahmed Emara"],
         ai_builders: &["DeepSeek", "ChatGPT", "Antigravity"],
         credits: "Mohamed Sayed · Ahmed Emara · DeepSeek · ChatGPT · Antigravity",
-        privacy: "Fully offline. No tracking, no network calls. Calculation history is stored locally on this PC only and can be cleared anytime.",
+        privacy: "All calculations run 100% locally in Rust with zero telemetry. History is stored only on this PC and can be cleared anytime. Optional GitHub Releases update checks can be toggled in Settings.",
         history_limit: HISTORY_MAX_ENTRIES,
     }
 }

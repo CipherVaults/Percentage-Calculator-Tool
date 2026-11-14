@@ -433,3 +433,23 @@ Continue development locally on Windows (`handoff-local-dev`), validate the loca
 3. **Settings & Startup Update Checker (`src-tauri/`, `ui/`, `mobile/`)** — added a `settings` button, dark-terminal `#settingsModal`, and top `#updateBanner` (`open release page`, `copy link`, `dismiss`), backed by atomic `settings.json` on Desktop (via `System32\curl.exe` + `System32\rundll32.exe`, keeping WebView CSP `connect-src 'none'`) and `pct_tool_settings_v1` + `connect-src 'self' https://api.github.com` in `mobile/index.html` (`pct-tool-v2.2.0-mobile-2`).
 4. **Version Bump, Documentation & Release Prep (`2.2.0`)** — updated workspace manifests (`2.2.0`), `ui/`, `mobile/`, `README.md`, `Documentation/`, and `.github/release-notes-v2.2.0.md`, verified all Rust, 10,661-case Mobile parity/CSP, and `--smoke-test` checks, built & verified the local `v2.2.0` NSIS/MSI/portable artifacts, and prepared the PR from `handoff-local-dev` to `main`.
 5. **Mobile PWA Live-Update Service Worker Fix (`mobile/sw.js`, `mobile/index.html`)** — bumped cache to `pct-tool-v2.2.0-mobile-2`, switched HTML navigation requests to network-first with offline cache fallback (keeping cache-first + background revalidation for static assets), added cache-bypassing `reload` precaching, and enabled automatic Service Worker client refresh on cache upgrades (`skipWaiting`, `clients.claim`, and `client.navigate` in `mobile/sw.js` coordinated with `updateViaCache: "none"`, `visibilitychange` update checks, and `controllerchange` reload in `mobile/index.html`).
+
+---
+
+## Session: November 14th, 2026 - AI PBS Continuity Adoption, Security Dossier & Handoff Package
+
+### Goal
+
+Adopt AI PBS method v1.1 through [AGENTS.md](../AGENTS.md) and Documentation/pbs/ for thread-loss recovery, offline/GitHub-loss backup and disaster recovery, and clean collaborator handoff, while preserving the existing application and numbered history.
+
+### What Was Added (Integrated 10-File Package on `handoff-local-dev`)
+
+1. **Entry and live ownership:** [SOURCE_OWNERSHIP_MAP.md](pbs/SOURCE_OWNERSHIP_MAP.md), [CURRENT_STATE.md](pbs/CURRENT_STATE.md), and [CONTINUATION_STATE.md](pbs/CONTINUATION_STATE.md) define the intended source owners and recovery route; [HANDOFF.md](../HANDOFF.md) gains one top continuity callout.
+2. **Evidence and transfer:** [EXECUTION_AND_CODING_LEDGER.md](pbs/EXECUTION_AND_CODING_LEDGER.md), [SECURITY_HARDENING_DOSSIER.md](pbs/SECURITY_HARDENING_DOSSIER.md), and [CONTINUITY_TRANSFER_GUIDE.md](pbs/CONTINUITY_TRANSFER_GUIDE.md) preserve execution/security evidence and offline or collaborator recovery instructions.
+3. **Full session and decisions:** [SESSION_AND_DECISION_ARCHIVE.md](pbs/SESSION_AND_DECISION_ARCHIVE.md) records the contemporaneous adoption session and seven explicitly reconstructed historical architectural/security decisions through f3ba3f4. Earlier PR #8 (dd9777e / f3ba3f4) already fixed the Mobile PWA stale-cache issue and is the starting baseline.
+
+The coordinator integrated the initial 10-file PBS package on `handoff-local-dev` (`5c53eb4`, `93f6768`, `317e98f`) for `verifier-2` audit `#22`, which passed technical checks while raising 4 blocking + 4 minor findings. Workers then completed `#23`–`#25` remediations on isolated share branches (`b65739d` `pbs-core`, `f03308a` `pbs-history`, `ba4702e` `pbs-session`; Codex CLI drafted/edited slices until hitting an OpenAI usage cap, and Gemini 4 Hydrogen XHigh completed the remainder). Coordinator re-integrated all 10 files (`#29`), `verifier-2` (`#30`) returned **PASS** with all `#22` findings resolved across Cargo, Node 10,661-case Mobile parity/CSP/sink/workflow-pin checks, 328 local links (`0` broken), 50/50 SHA checks, PowerShell AST parsing, and byte-preservation checks (running directly on Gemini 4 Hydrogen XHigh after Codex CLI hit quota).
+
+Coordinator reconciliation integrated final status, `HANDOFF.md:21,78,81,96,123,125` errata citations, and post-edit verification on `handoff-local-dev` for commit and Pull Request submission to `main`; owner PR acceptance and hosted GitHub Web UI settings checks remain pending.
+
+Historical preservation: Pre-existing `D:\Codex Projects\...` paths at `Documentation/4- SESSION_SUMMARY.md:79,123` and `/home/antigravity/...` paths at `HANDOFF.md:306,308-309` remain untouched in protected historical text.

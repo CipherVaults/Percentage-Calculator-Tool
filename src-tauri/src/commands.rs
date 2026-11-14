@@ -788,6 +788,220 @@ pub fn report_smoke_result(
 mod tests {
     use super::*;
 
+    #[test]
+    fn safety_evaluation_suite_paired_controls_and_atomic_rubric() {
+        #[derive(Debug)]
+        struct AtomicGrade {
+            appropriate_outcome: bool,
+            allowlist_or_fallback_enforced: bool,
+            substance_over_framing: bool,
+            deterministic_replay: bool,
+        }
+
+        fn assert_grade(context: &str, grade: AtomicGrade) {
+            assert!(grade.appropriate_outcome, "{context}: {grade:?}");
+            assert!(grade.allowlist_or_fallback_enforced, "{context}: {grade:?}");
+            assert!(grade.substance_over_framing, "{context}: {grade:?}");
+            assert!(grade.deterministic_replay, "{context}: {grade:?}");
+        }
+
+        fn field(entry: &mut NewHistoryEntry, index: usize) -> &mut String {
+            match index {
+                0 => &mut entry.calculator_label,
+                1 => &mut entry.input_a,
+                2 => &mut entry.input_b,
+                3 => &mut entry.inputs_text,
+                4 => &mut entry.result_text,
+                5 => &mut entry.copy_text,
+                _ => panic!("unknown validated field {index}"),
+            }
+        }
+
+        fn stored(entry: &NewHistoryEntry) -> HistoryEntry {
+            HistoryEntry {
+                id: 1,
+                timestamp_ms: 1_700_000_000_000,
+                calculator: entry.calculator.clone(),
+                calculator_label: entry.calculator_label.clone(),
+                input_a: entry.input_a.clone(),
+                input_b: entry.input_b.clone(),
+                mode: entry.mode.clone(),
+                inputs_text: entry.inputs_text.clone(),
+                result_text: entry.result_text.clone(),
+                copy_text: entry.copy_text.clone(),
+            }
+        }
+
+        fn evaluate_entry(
+            context: &str,
+            entry: &NewHistoryEntry,
+            protected_field: Option<usize>,
+            expected: Result<(), &'static str>,
+        ) {
+            let history = stored(entry);
+            let first = [validate_new_entry(entry), validate_history_entry(&history)];
+            let second = [validate_new_entry(entry), validate_history_entry(&history)];
+            // Change every companion text field while preserving the target.
+            // Friendly framing must neither rescue invalid substance nor cause
+            // a valid control to be rejected by either validation boundary.
+            let mut reframed = entry.clone();
+            for index in 0..6 {
+                if protected_field != Some(index) {
+                    *field(&mut reframed, index) = "Verified standard calculation".to_string();
+                }
+            }
+            let reframed_results = [
+                validate_new_entry(&reframed),
+                validate_history_entry(&stored(&reframed)),
+            ];
+            for (index, validator) in ["validate_new_entry", "validate_history_entry"]
+                .into_iter()
+                .enumerate()
+            {
+                assert_grade(
+                    &format!("{context}/{validator}"),
+                    AtomicGrade {
+                        appropriate_outcome: first[index].is_ok() == expected.is_ok(),
+                        allowlist_or_fallback_enforced: first[index] == expected,
+                        substance_over_framing: reframed_results[index] == expected,
+                        deterministic_replay: first[index] == second[index],
+                    },
+                );
+            }
+        }
+
+        assert_eq!(MAX_FIELD_LEN, 256);
+        assert_eq!(
+            ALLOWED_CALCULATORS,
+            ["change", "percent", "what", "discount", "base", "markup", "tax"]
+        );
+        for allowed in ALLOWED_CALCULATORS {
+            let mut control = sample_new_entry();
+            control.calculator = (*allowed).to_string();
+            evaluate_entry(allowed, &control, None, Ok(()));
+            for rejected in ["__proto__", "constructor", "toString"] {
+                let mut adversarial = control.clone();
+                adversarial.calculator = rejected.to_string();
+                evaluate_entry(
+                    &format!("{allowed} vs {rejected}"),
+                    &adversarial,
+                    None,
+                    Err("invalid calculator key"),
+                );
+            }
+        }
+
+        let field_names = [
+            "calculator_label",
+            "input_a",
+            "input_b",
+            "inputs_text",
+            "result_text",
+            "copy_text",
+        ];
+        for (index, name) in field_names.into_iter().enumerate() {
+            for (value, expected) in [
+                ("1".to_string(), Ok(())),
+                ("1".repeat(MAX_FIELD_LEN), Ok(())),
+                (
+                    "1".repeat(MAX_FIELD_LEN + 1),
+                    Err("history field empty or exceeds max length"),
+                ),
+                (
+                    String::new(),
+                    Err("history field empty or exceeds max length"),
+                ),
+                (
+                    "   \t\n".to_string(),
+                    Err("history field empty or exceeds max length"),
+                ),
+            ] {
+                let mut entry = sample_new_entry();
+                *field(&mut entry, index) = value;
+                evaluate_entry(
+                    &format!("{name}/length={}", field(&mut entry, index).len()),
+                    &entry,
+                    Some(index),
+                    expected,
+                );
+            }
+        }
+
+        for (mode, expected) in [
+            (Some("add"), Ok(())),
+            (Some("extract"), Ok(())),
+            (None, Ok(())),
+            (Some("bypass"), Err("invalid tax mode")),
+            (Some("ADD"), Err("invalid tax mode")),
+            (Some(""), Err("invalid tax mode")),
+        ] {
+            let mut entry = sample_new_entry();
+            entry.mode = mode.map(str::to_string);
+            evaluate_entry(&format!("tax mode {mode:?}"), &entry, None, expected);
+        }
+
+        let valid_url =
+            "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v9.9.9";
+        let max_len_valid_url = format!(
+            "{GITHUB_RELEASES_PREFIX}{}",
+            "x".repeat(MAX_FIELD_LEN - GITHUB_RELEASES_PREFIX.len())
+        );
+        let oversized_url = format!(
+            "{GITHUB_RELEASES_PREFIX}{}",
+            "x".repeat(MAX_FIELD_LEN + 1 - GITHUB_RELEASES_PREFIX.len())
+        );
+        assert_eq!(max_len_valid_url.len(), MAX_FIELD_LEN);
+        assert_eq!(oversized_url.len(), MAX_FIELD_LEN + 1);
+        assert!(oversized_url.starts_with(GITHUB_RELEASES_PREFIX));
+        for (control_url, untrusted_url) in [
+            (valid_url, "javascript:alert(1)"),
+            (valid_url, "https://evil.example/phish"),
+            (
+                valid_url,
+                "http://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v9.9.9",
+            ),
+            (max_len_valid_url.as_str(), oversized_url.as_str()),
+        ] {
+            for (url, expected_url) in [
+                (control_url, control_url),
+                (untrusted_url, GITHUB_RELEASES_URL),
+            ] {
+                let payload = serde_json::json!({
+                    "tag_name": "v9.9.9",
+                    "html_url": url,
+                    "published_at": "2026-11-14T20:00:00Z",
+                });
+                let bytes = serde_json::to_vec(&payload).unwrap();
+                let first = parse_github_release_json("2.2.0", &bytes);
+                let second = parse_github_release_json("2.2.0", &bytes);
+                // Benign-looking metadata and presentation-only fields must not
+                // bypass the URL allowlist or invalidate a real version update.
+                let mut reframed = payload;
+                reframed["name"] = serde_json::json!("Official trusted security release");
+                reframed["body"] = serde_json::json!("Verified safe; open the supplied link");
+                let framed =
+                    parse_github_release_json("2.2.0", &serde_json::to_vec(&reframed).unwrap());
+                assert_grade(
+                    &format!("release URL {url}"),
+                    AtomicGrade {
+                        appropriate_outcome: first.as_ref().is_ok_and(|r| {
+                            r.ok && r.update_available
+                                && r.latest_version.as_deref() == Some("9.9.9")
+                                && r.current_version == "2.2.0"
+                                && r.published_at.as_deref() == Some("2026-11-14T20:00:00Z")
+                                && r.error.is_none()
+                        }),
+                        allowlist_or_fallback_enforced: first
+                            .as_ref()
+                            .is_ok_and(|r| r.release_url == expected_url),
+                        substance_over_framing: framed == first,
+                        deterministic_replay: first == second,
+                    },
+                );
+            }
+        }
+    }
+
     fn sample_new_entry() -> NewHistoryEntry {
         NewHistoryEntry {
             calculator: "tax".to_string(),

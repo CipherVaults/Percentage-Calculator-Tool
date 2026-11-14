@@ -52,7 +52,7 @@ The repository contains two offline, zero-telemetry calculator applications back
 |    - Single self-contained HTML file with inline CSS, JS & fallback PNG |
 |    - Exact SHA-256 CSP <meta> digests + <meta name="referrer" content="no-referrer">
 |    - 500-entry schema-validated localStorage history + storage event sync
-|    - Offline-first Service Worker (pct-tool-v2.2.0-mobile-1, scope &    |
+|    - Offline-first Service Worker (pct-tool-v2.2.0-mobile-2, scope &    |
 |      !response.redirected guarded) deployed via GitHub Pages on main    |
 +-------------------------------------------------------------------------+
 ```
@@ -95,7 +95,7 @@ The repository contains two offline, zero-telemetry calculator applications back
 | `src-tauri/capabilities/default.json` | Least-privilege capability list (`permissions: []`) |
 | `ui/index.html`, `ui/styles.css`, `ui/main.js` | Desktop Tauri webview HTML, terminal theme + `.quick-nav` CSS, IPC controller + live `--smoke-test` suite |
 | `mobile/index.html` | Standalone single-file Mobile & Web PWA with inline `<style>`/`<script>` pinned via SHA-256 CSP `<meta>` |
-| `mobile/sw.js` | Offline Service Worker (`pct-tool-v2.2.0-mobile-1`) with scope-prefix & `!response.redirected` guards |
+| `mobile/sw.js` | Offline Service Worker (`pct-tool-v2.2.0-mobile-2`) with scope-prefix & `!response.redirected` guards |
 | `mobile/manifest.webmanifest` & `mobile/icons/` | Web app manifest + Apple Touch (`180x180`) and Android (`192x192`, `512x512`, `maskable`) icons |
 | `.github/workflows/build.yml` | SHA-pinned CI: Ubuntu verification → Windows Clippy/Tests/Tauri Build/Smoke Test/SHA256SUMS → `main`/tag GitHub Release publisher |
 | `.github/workflows/pages.yml` | SHA-pinned GitHub Pages workflow: re-verifies 10k parity + CSP SHA-256 hashes → deploys `mobile/` from `refs/heads/main` only |

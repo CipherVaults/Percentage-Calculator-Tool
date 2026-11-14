@@ -21,7 +21,7 @@
 - **Settings & Startup Update Checker (`src-tauri/`, `ui/`, `mobile/`):**
   - Added a `settings` button and dark-terminal **Settings** modal (`autoUpdateToggle` persisted locally in `%APPDATA%\com.percentagecalculator.tool\settings.json` on Desktop and `pct_tool_settings_v1` in `localStorage` on Mobile).
   - Automatic startup check against GitHub Releases is enabled by default and can be toggled off anytime for 100% offline launches; manual checks are available via `check for updates now`.
-  - Desktop queries `api.github.com` safely from Rust via Windows `System32\curl.exe` and opens releases with `System32\rundll32.exe`, keeping the WebView CSP at `connect-src 'none'`. Mobile/PWA permits only `connect-src 'self' https://api.github.com;` while keeping strict SHA-256 CSP hashes and bumping Service Worker cache to `pct-tool-v2.2.0-mobile-1`.
+  - Desktop queries `api.github.com` safely from Rust via Windows `System32\curl.exe` and opens releases with `System32\rundll32.exe`, keeping the WebView CSP at `connect-src 'none'`. Mobile/PWA permits only `connect-src 'self' https://api.github.com;` while keeping strict SHA-256 CSP hashes and bumping Service Worker cache to `pct-tool-v2.2.0-mobile-2`.
   - When a newer release tag is published, an in-app update banner provides one-click **open release page**, **copy link**, and **dismiss** controls.
 
 ## Downloads & Integrity Verification

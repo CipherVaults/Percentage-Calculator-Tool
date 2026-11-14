@@ -2,6 +2,9 @@
 
 This document captures everything required to transition development cleanly from **Antigravity Remote Agents** to a **local Antigravity Desktop installation on Windows** with local Git, GitHub CLI (`gh`), Rust/Tauri builds, and automated verification.
 
+> **AI PBS Continuity & Quick Entry (`Documentation/pbs/`):** New AI threads and human collaborators: begin with [AGENTS.md](AGENTS.md), then [Documentation/pbs/](Documentation/pbs/CURRENT_STATE.md): [CURRENT_STATE.md](Documentation/pbs/CURRENT_STATE.md), [CONTINUATION_STATE.md](Documentation/pbs/CONTINUATION_STATE.md), and [SOURCE_OWNERSHIP_MAP.md](Documentation/pbs/SOURCE_OWNERSHIP_MAP.md).
+> Security, recovery, and evidence: [SECURITY_HARDENING_DOSSIER.md](Documentation/pbs/SECURITY_HARDENING_DOSSIER.md), [CONTINUITY_TRANSFER_GUIDE.md](Documentation/pbs/CONTINUITY_TRANSFER_GUIDE.md), [EXECUTION_AND_CODING_LEDGER.md](Documentation/pbs/EXECUTION_AND_CODING_LEDGER.md), [SESSION_AND_DECISION_ARCHIVE.md](Documentation/pbs/SESSION_AND_DECISION_ARCHIVE.md), and [Documentation/4- SESSION_SUMMARY.md](Documentation/4-%20SESSION_SUMMARY.md). Integrated 10-file PBS package (verified on `handoff-local-dev` for PR review; owner acceptance pending). Historical `HANDOFF.md` errata — `L81`/`96`/`123`/`125` IPC typos (`settings_get`/`settings_set`/`check_for_update` vs canonical `get_settings`/`set_settings`/`check_for_updates`) and unimplemented `L21`/`78` `Ctrl/Cmd+Shift+C`/`0%` claims — are reconciled in [EXECUTION_AND_CODING_LEDGER.md](Documentation/pbs/EXECUTION_AND_CODING_LEDGER.md).
+
 ---
 
 ## 1. Repository & Version Identity

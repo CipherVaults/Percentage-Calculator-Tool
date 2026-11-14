@@ -60,7 +60,7 @@ In **v1.0–v1.1** the desktop shell used Electron. In **v2.0.0** the app was re
 - real-window Tauri smoke test (`--smoke-test`)
 - Windows NSIS and MSI installer builds
 - Windows standalone portable executable
-- hardened standalone single-file Mobile & Web PWA HTML edition (`mobile/`) deployed at `https://ciphervaults.github.io/Percentage-Calculator-Tool/` for iPhone Safari (Add to Home Screen) and Android Chrome (Install app), protected by a SHA-256 hash CSP `<meta>` tag, scope-checked offline Service Worker (`pct-tool-v2.2.0-mobile-1`), and schema-validated `localStorage`
+- hardened standalone single-file Mobile & Web PWA HTML edition (`mobile/`) deployed at `https://ciphervaults.github.io/Percentage-Calculator-Tool/` for iPhone Safari (Add to Home Screen) and Android Chrome (Install app), protected by a SHA-256 hash CSP `<meta>` tag, scope-checked offline Service Worker (`pct-tool-v2.2.0-mobile-2`), and schema-validated `localStorage`
 - SHA-pinned GitHub Actions CI/CD workflows for automated Windows builds, verification, `SHA256SUMS.txt` release checksums, and main-only GitHub Pages deployment
 - project documentation modeled after the AI Ambassadors documentation structure
 

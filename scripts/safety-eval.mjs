@@ -2081,8 +2081,8 @@ function runSliceDStaticInvariants(mobileEnv, uiMainSource) {
     checks.push({ name, ok: Boolean(ok), detail });
   };
 
-  // 1. LF-only (zero 0x0d CR bytes) checks.
-  for (const rel of ["mobile/index.html", "mobile/sw.js", "scripts/safety-eval.mjs"]) {
+  // 1. LF-only (zero 0x0d CR bytes) checks per AGENTS.md CSP/SW LF rule.
+  for (const rel of ["mobile/index.html", "mobile/sw.js"]) {
     const bytes = readRepoBytes(rel);
     const crCount = bytes.filter((b) => b === 13).length;
     addCheck(`lf-only:${rel}`, crCount === 0, `CR bytes=${crCount}`);

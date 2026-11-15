@@ -150,18 +150,80 @@ fn process_line(line: &str) -> BridgeResponse {
     }
 }
 
+const MAX_BRIDGE_LINE_BYTES: usize = 65_536;
+
+fn read_bounded_line<R: BufRead>(
+    reader: &mut R,
+    max_bytes: usize,
+    out: &mut Vec<u8>,
+) -> io::Result<Option<bool>> {
+    out.clear();
+    loop {
+        let buf = reader.fill_buf()?;
+        if buf.is_empty() {
+            return Ok(if out.is_empty() { None } else { Some(true) });
+        }
+        if let Some(pos) = buf.iter().position(|&b| b == b'\n') {
+            let chunk = &buf[..=pos];
+            if out.len().saturating_add(chunk.len()) > max_bytes {
+                reader.consume(pos + 1);
+                out.clear();
+                return Ok(Some(false));
+            }
+            out.extend_from_slice(chunk);
+            reader.consume(pos + 1);
+            return Ok(Some(true));
+        }
+        let len = buf.len();
+        if out.len().saturating_add(len) > max_bytes {
+            reader.consume(len);
+            loop {
+                let rest = reader.fill_buf()?;
+                if rest.is_empty() {
+                    break;
+                }
+                if let Some(pos) = rest.iter().position(|&b| b == b'\n') {
+                    reader.consume(pos + 1);
+                    break;
+                }
+                let rlen = rest.len();
+                reader.consume(rlen);
+            }
+            out.clear();
+            return Ok(Some(false));
+        }
+        out.extend_from_slice(buf);
+        reader.consume(len);
+    }
+}
+
 fn main() -> io::Result<()> {
     let stdin = io::stdin();
     let stdout = io::stdout();
+    let mut reader = io::BufReader::new(stdin.lock());
     let mut writer = BufWriter::new(stdout.lock());
+    let mut raw_line = Vec::new();
 
-    for line_res in stdin.lock().lines() {
-        let line = line_res?;
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let resp = process_line(trimmed);
+    while let Some(fits) = read_bounded_line(&mut reader, MAX_BRIDGE_LINE_BYTES, &mut raw_line)? {
+        let resp = if !fits {
+            BridgeResponse::err(Value::Null, "request line exceeds max allowed size")
+        } else {
+            let line = match std::str::from_utf8(&raw_line) {
+                Ok(s) => s,
+                Err(err) => {
+                    let resp = BridgeResponse::err(Value::Null, format!("invalid UTF-8: {err}"));
+                    serde_json::to_writer(&mut writer, &resp).map_err(io::Error::other)?;
+                    writer.write_all(b"\n")?;
+                    writer.flush()?;
+                    continue;
+                }
+            };
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            process_line(trimmed)
+        };
         serde_json::to_writer(&mut writer, &resp).map_err(io::Error::other)?;
         writer.write_all(b"\n")?;
         writer.flush()?;
@@ -199,5 +261,21 @@ mod tests {
             process_line(r#"{"id":"z1","surface":"ipc","op":"calc_change","a":0,"b":100}"#);
         assert!(r_ipc_zero_div.ok);
         assert_eq!(r_ipc_zero_div.result.unwrap()["ok"], "false");
+
+        let mut oversized = "a".repeat(80);
+        oversized.push('\n');
+        oversized.push_str("ok\n");
+        let mut cursor = io::Cursor::new(oversized.into_bytes());
+        let mut buf = Vec::new();
+        assert_eq!(
+            read_bounded_line(&mut cursor, 32, &mut buf).unwrap(),
+            Some(false)
+        );
+        assert_eq!(
+            read_bounded_line(&mut cursor, 32, &mut buf).unwrap(),
+            Some(true)
+        );
+        assert_eq!(buf, b"ok\n");
+        assert_eq!(read_bounded_line(&mut cursor, 32, &mut buf).unwrap(), None);
     }
 }

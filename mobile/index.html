@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'sha256-HppoWhfVX+UyR2KqXbS6U2Q3KafIo1MVyti/h94cX9o='; script-src 'sha256-2zS4xTl/wNWvnPn+fnubdIk+vxoADbiLhjxsjy9jHr0='; worker-src 'self'; child-src 'self'; img-src 'self' data:; manifest-src 'self'; connect-src 'self' https://api.github.com; object-src 'none'; base-uri 'none'; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'sha256-HppoWhfVX+UyR2KqXbS6U2Q3KafIo1MVyti/h94cX9o='; script-src 'sha256-TBLbyC6w4mcvDRHt1c3u2B0Z8Sz/WAPkTKFYihhgdkM='; worker-src 'self'; child-src 'self'; img-src 'self' data:; manifest-src 'self'; connect-src 'self' https://api.github.com; object-src 'none'; base-uri 'none'; form-action 'none';">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0E0F12">
   <meta name="color-scheme" content="dark">
@@ -1230,7 +1230,7 @@
     </div>
   </div>
 
-  <footer>Mohamed Sayed · Ahmed Emara · DeepSeek · ChatGPT · Antigravity · 2026 · <span id="appVersion">Mobile &amp; Web v2.2.0</span></footer>
+  <footer>Mohamed Sayed · Ahmed Emara · DeepSeek · ChatGPT · Antigravity · 2026 · <span id="appVersion">Mobile &amp; Web v2.2.1</span></footer>
 </div>
 
 <div class="modal-backdrop hidden" id="aboutModal" role="dialog" aria-modal="true" aria-labelledby="aboutModalTitle">
@@ -1244,7 +1244,7 @@
       <div class="about-icon-badge" aria-hidden="true">%</div>
       <div>
         <div class="about-app-name" id="aboutAppName">Percentage Calculator Tool</div>
-        <div class="about-version-pill" id="aboutVersionPill">Mobile &amp; Web v2.2.0 · Offline HTML / PWA</div>
+        <div class="about-version-pill" id="aboutVersionPill">Mobile &amp; Web v2.2.1 · Offline HTML / PWA</div>
       </div>
     </div>
 
@@ -1360,12 +1360,19 @@
   const COPY_FEEDBACK_MS = 1200;
   const HISTORY_LIMIT = 500;
   const MAX_FIELD_LEN = 256;
-  const APP_VERSION = "2.2.0";
+  const MAX_COPY_LEN = 4096;
+  const APP_VERSION = "2.2.1";
   const WEB_APP_URL = "https://ciphervaults.github.io/Percentage-Calculator-Tool/";
   const RELEASE_URL =
     "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/latest";
+  const RELEASE_URL_PREFIX =
+    "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/";
   const GITHUB_LATEST_RELEASE_API =
     "https://api.github.com/repos/CipherVaults/Percentage-Calculator-Tool/releases/latest";
+  const GITHUB_RELEASE_API_PREFIX =
+    "https://api.github.com/repos/CipherVaults/Percentage-Calculator-Tool/releases";
+  const UPDATE_FETCH_TIMEOUT_MS = 8000;
+  const UPDATE_MAX_BYTES = 65536;
   const HISTORY_STORAGE_KEY = "pct_tool_history_v2";
   const SETTINGS_STORAGE_KEY = "pct_tool_settings_v1";
   const ALLOWED_CALCULATORS = new Set([
@@ -1572,11 +1579,21 @@
 
   // --- Persistent on-device history (localStorage with in-memory fallback) ---
 
-  function isValidHistoryField(value) {
+  function hasControlChars(value, allowNewlines = false) {
+    for (let i = 0; i < value.length; i += 1) {
+      const code = value.charCodeAt(i);
+      if (allowNewlines && code === 10) continue;
+      if (code < 32 || code === 127) return true;
+    }
+    return false;
+  }
+
+  function isValidHistoryField(value, allowNewlines = false) {
     return (
       typeof value === "string" &&
       value.trim().length > 0 &&
-      value.length <= MAX_FIELD_LEN
+      value.length <= MAX_FIELD_LEN &&
+      !hasControlChars(value, allowNewlines)
     );
   }
 
@@ -1592,7 +1609,10 @@
     ) {
       return null;
     }
-    if (item.copyText !== undefined && !isValidHistoryField(item.copyText)) {
+    if (
+      item.copyText !== undefined &&
+      !isValidHistoryField(item.copyText, true)
+    ) {
       return null;
     }
     const mode = item.mode ?? null;
@@ -1625,7 +1645,7 @@
       !isValidHistoryField(candidate.inputB) ||
       !isValidHistoryField(candidate.inputsText) ||
       !isValidHistoryField(candidate.resultText) ||
-      !isValidHistoryField(candidate.copyText)
+      !isValidHistoryField(candidate.copyText, true)
     ) {
       return null;
     }
@@ -1734,30 +1754,35 @@
   function readSettingsFromStorage() {
     try {
       const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
-      if (!raw) return { checkUpdatesOnStartup: true };
+      if (raw === null || raw === "") return { checkUpdatesOnStartup: true };
       const parsed = JSON.parse(raw);
       return {
         checkUpdatesOnStartup:
           typeof parsed?.checkUpdatesOnStartup === "boolean"
             ? parsed.checkUpdatesOnStartup
-            : true
+            : false
       };
     } catch {
-      return { checkUpdatesOnStartup: true };
+      return { checkUpdatesOnStartup: false };
     }
   }
 
   function writeSettingsToStorage(settings) {
+    const previous = { ...currentSettings };
     const clean = {
       checkUpdatesOnStartup: Boolean(settings?.checkUpdatesOnStartup)
     };
-    currentSettings = clean;
     try {
       window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(clean));
+      currentSettings = clean;
+      return clean;
     } catch {
-      // Ignore storage errors cleanly.
+      currentSettings = previous;
+      const toggle = document.getElementById("autoUpdateToggle");
+      if (toggle) toggle.checked = Boolean(previous.checkUpdatesOnStartup);
+      setUpdateStatus("Failed to save update setting on this device.", true);
+      return previous;
     }
-    return clean;
   }
 
   // --- DOM helpers & clipboard ---
@@ -1932,6 +1957,11 @@
 
   async function copyText(text, button) {
     if (typeof text !== "string" || text.trim() === "") return false;
+    const copyBytes =
+      typeof TextEncoder === "function"
+        ? new TextEncoder().encode(text).length
+        : text.length;
+    if (copyBytes > MAX_COPY_LEN) return false;
     try {
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(text);
@@ -2780,12 +2810,36 @@
     statusEl.classList.toggle("is-error", isError);
   }
 
+  function sanitizeReleaseUrl(url) {
+    if (
+      typeof url !== "string" ||
+      url.length === 0 ||
+      url.length > MAX_FIELD_LEN ||
+      hasControlChars(url) ||
+      /\s|\\|\.\./.test(url) ||
+      !url.startsWith(RELEASE_URL_PREFIX)
+    ) {
+      return RELEASE_URL;
+    }
+    try {
+      const parsed = new URL(url);
+      if (
+        parsed.protocol !== "https:" ||
+        parsed.origin !== "https://github.com" ||
+        !parsed.pathname.startsWith(
+          "/CipherVaults/Percentage-Calculator-Tool/releases/"
+        )
+      ) {
+        return RELEASE_URL;
+      }
+      return parsed.href;
+    } catch {
+      return RELEASE_URL;
+    }
+  }
+
   function setReleaseLinks(url) {
-    const safeUrl =
-      typeof url === "string" &&
-      url.startsWith("https://github.com/CipherVaults/Percentage-Calculator-Tool/")
-        ? url
-        : RELEASE_URL;
+    const safeUrl = sanitizeReleaseUrl(url);
     latestReleaseUrl = safeUrl;
     const bannerLink = document.getElementById("openUpdateBannerBtn");
     const settingsLink = document.getElementById("openReleasePageBtn");
@@ -2816,18 +2870,76 @@
         swRegistration.update().catch(() => {});
       }
     }
+    const controller =
+      typeof AbortController === "function" ? new AbortController() : null;
+    const timeoutId = controller
+      ? setTimeout(() => controller.abort(), UPDATE_FETCH_TIMEOUT_MS)
+      : null;
     try {
-      const response = await fetch(GITHUB_LATEST_RELEASE_API, {
+      const fetchOptions = {
         headers: { Accept: "application/vnd.github+json" },
         cache: "no-store"
-      });
+      };
+      if (controller) fetchOptions.signal = controller.signal;
+      const response = await fetch(GITHUB_LATEST_RELEASE_API, fetchOptions);
+      if (response?.redirected) {
+        if (manual) {
+          setUpdateStatus(
+            "Unexpected redirect while checking GitHub Releases.",
+            true
+          );
+        }
+        return;
+      }
+      if (
+        typeof response?.url === "string" &&
+        response.url.length > 0 &&
+        !response.url.startsWith(GITHUB_RELEASE_API_PREFIX)
+      ) {
+        if (manual) {
+          setUpdateStatus(
+            "Unexpected response origin while checking GitHub Releases.",
+            true
+          );
+        }
+        return;
+      }
       if (!response.ok) {
         if (manual) {
           setUpdateStatus(`GitHub returned HTTP ${response.status}.`, true);
         }
         return;
       }
-      const data = await response.json();
+      const contentLen = response.headers?.get?.("content-length");
+      if (contentLen && Number(contentLen) > UPDATE_MAX_BYTES) {
+        if (manual) {
+          setUpdateStatus(
+            "GitHub release metadata exceeded size limit.",
+            true
+          );
+        }
+        return;
+      }
+      let data;
+      if (typeof response.text === "function") {
+        const rawText = await response.text();
+        const byteLen =
+          typeof TextEncoder === "function"
+            ? new TextEncoder().encode(rawText).length
+            : rawText.length;
+        if (byteLen > UPDATE_MAX_BYTES) {
+          if (manual) {
+            setUpdateStatus(
+              "GitHub release metadata exceeded size limit.",
+              true
+            );
+          }
+          return;
+        }
+        data = JSON.parse(rawText);
+      } else {
+        data = await response.json();
+      }
       if (data?.draft || data?.prerelease) {
         if (manual) {
           setUpdateStatus(`Up to date — running Mobile & Web v${APP_VERSION}.`, false);
@@ -2843,7 +2955,7 @@
         return;
       }
       const latestVersion = triplet.join(".");
-      const releaseUrl = data?.html_url || RELEASE_URL;
+      const releaseUrl = sanitizeReleaseUrl(data?.html_url);
       setReleaseLinks(releaseUrl);
 
       if (isNewerVersion(APP_VERSION, latestVersion)) {
@@ -2866,6 +2978,7 @@
         );
       }
     } finally {
+      if (timeoutId !== null) clearTimeout(timeoutId);
       if (checkBtn) checkBtn.disabled = false;
     }
   }

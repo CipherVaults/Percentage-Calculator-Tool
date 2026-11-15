@@ -1764,9 +1764,9 @@ function createStatefulMockTauriBackend(rustBridge, opts = {}) {
   let updateResult = opts.updateResult ?? {
     ok: true,
     updateAvailable: false,
-    currentVersion: "2.2.0",
-    latestVersion: "2.2.0",
-    releaseUrl: "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.2.0",
+    currentVersion: "2.2.1",
+    latestVersion: "2.2.1",
+    releaseUrl: "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.2.1",
     publishedAt: "2026-10-01T00:00:00Z",
     note: null,
   };
@@ -1830,7 +1830,7 @@ function createStatefulMockTauriBackend(rustBridge, opts = {}) {
     },
     async _dispatch(cmd, args = {}) {
       if (cmd === "is_smoke_test") return false;
-      if (cmd === "get_app_info") return { version: "2.2.0", platform: "windows" };
+      if (cmd === "get_app_info") return { version: "2.2.1", platform: "windows" };
       if (cmd === "get_settings") return { ...settings };
       if (cmd === "set_settings") {
         if (setSettingsFailuresRemaining > 0) {
@@ -2119,17 +2119,17 @@ async function createMobileSandbox(artifacts, opts = {}) {
     status: 200,
     headers: { get: () => "120" },
     text: async () => JSON.stringify({
-      tag_name: "v2.2.0",
+      tag_name: "v2.2.1",
       draft: false,
       prerelease: false,
-      html_url: "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.2.0",
+      html_url: "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.2.1",
       published_at: "2026-10-01T00:00:00Z",
     }),
     json: async () => ({
-      tag_name: "v2.2.0",
+      tag_name: "v2.2.1",
       draft: false,
       prerelease: false,
-      html_url: "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.2.0",
+      html_url: "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.2.1",
       published_at: "2026-10-01T00:00:00Z",
     }),
   }));
@@ -3298,7 +3298,7 @@ async function runSliceA(artifacts, rustBridge, rng) {
       uSandbox.backend.setUpdateResponse({
         ok: true,
         updateAvailable: false,
-        currentVersion: "2.2.0",
+        currentVersion: "2.2.1",
         latestVersion: "2.1.1",
         releaseUrl: "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.1.1",
       });
@@ -3307,7 +3307,7 @@ async function runSliceA(artifacts, rustBridge, rng) {
     uDoc.getElementById("checkUpdatesNowBtn").click();
     await uSandbox.drain();
     const statusText = uDoc.getElementById("updateStatusText").textContent;
-    const versionDisplayValid = statusText.includes("2.2.0") && !statusText.includes("2.1.1");
+    const versionDisplayValid = statusText.includes("2.2.1") && !statusText.includes("2.1.1");
 
     let securityFiltersPassed = true;
     if (surf.name === "desktop") {
@@ -4457,24 +4457,24 @@ async function executeMultiTurnTranscript({ txId, family, surface, persona, conv
       }
     } else {
       // family === "updates_security_and_sw" (Desktop IPC updates & release allowlist)
-      // Turn 2: Remote latestVersion OLDER (2.1.1) while running 2.2.0 -> MUST say running v2.2.0!
+      // Turn 2: Remote latestVersion OLDER (2.1.1) while running 2.2.1 -> MUST say running v2.2.1!
       sandbox.backend.setUpdateResponse({
         ok: true,
         updateAvailable: false,
-        currentVersion: "2.2.0",
+        currentVersion: "2.2.1",
         latestVersion: "2.1.1",
         releaseUrl: "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.1.1",
       });
       doc.getElementById("checkUpdatesNowBtn").click();
       await sandbox.drain();
       const status2 = doc.getElementById("updateStatusText").textContent;
-      recordTurn("turn2_uptodate_shows_running_version", status2.includes("2.2.0") && !status2.includes("2.1.1"), status2);
+      recordTurn("turn2_uptodate_shows_running_version", status2.includes("2.2.1") && !status2.includes("2.1.1"), status2);
 
       // Turn 3: Newer release available -> banner visible & release URL opened only if prefix matches
       sandbox.backend.setUpdateResponse({
         ok: true,
         updateAvailable: true,
-        currentVersion: "2.2.0",
+        currentVersion: "2.2.1",
         latestVersion: "2.3.0",
         releaseUrl: "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.3.0",
       });
@@ -4681,7 +4681,7 @@ async function executeMultiTurnTranscript({ txId, family, surface, persona, conv
     }
   } else {
     // updates_security_and_sw on Mobile
-    // Turn 2: Older remote tag v2.1.1 -> must report running v2.2.0!
+    // Turn 2: Older remote tag v2.1.1 -> must report running v2.2.1!
     const mPayload2 = {
       tag_name: "v2.1.1",
       draft: false,
@@ -4698,7 +4698,7 @@ async function executeMultiTurnTranscript({ txId, family, surface, persona, conv
     mDoc.getElementById("checkUpdatesNowBtn").click();
     await mSandbox.drain();
     const ms2 = mDoc.getElementById("updateStatusText").textContent;
-    recordTurn("turn2_uptodate_shows_running_version", ms2.includes("2.2.0") && !ms2.includes("2.1.1"), ms2);
+    recordTurn("turn2_uptodate_shows_running_version", ms2.includes("2.2.1") && !ms2.includes("2.1.1"), ms2);
 
     // Turn 3: Draft or prerelease or spoofed html_url MUST be ignored / rejected safely
     const mPayload3 = {

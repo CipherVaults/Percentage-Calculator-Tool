@@ -6,6 +6,7 @@
 
 const COPY_FEEDBACK_MS = 1200;
 const MAX_FIELD_LEN = 256;
+const MAX_COPY_LEN = 4096;
 const WEB_APP_URL = "https://ciphervaults.github.io/Percentage-Calculator-Tool/";
 const RELEASE_URL =
   "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/latest";
@@ -235,6 +236,11 @@ function showCopyFeedback(button) {
 
 async function copyText(text, button) {
   if (typeof text !== "string" || text.trim() === "") return false;
+  const copyBytes =
+    typeof TextEncoder === "function"
+      ? new TextEncoder().encode(text).length
+      : text.length;
+  if (copyBytes > MAX_COPY_LEN) return false;
   try {
     await invoke("copy_text", { text });
     showCopyFeedback(button);
@@ -337,6 +343,7 @@ async function updateChangeLive() {
     return;
   }
 
+  lastValidCalc.change = null;
   try {
     const result = await invoke("calc_change", {
       originalValue: orig,
@@ -398,6 +405,7 @@ async function updatePercentLive() {
     return;
   }
 
+  lastValidCalc.percent = null;
   try {
     const result = await invoke("calc_percent_of_total", { part: x, total: y });
     if (ticket !== seq.percent) return;
@@ -456,6 +464,7 @@ async function updateWhatLive() {
     return;
   }
 
+  lastValidCalc.what = null;
   try {
     const result = await invoke("calc_portion", { percent: x, number: y });
     if (ticket !== seq.what) return;
@@ -509,6 +518,7 @@ async function updateDiscountLive() {
     return;
   }
 
+  lastValidCalc.discount = null;
   try {
     const result = await invoke("calc_discount", {
       price,
@@ -571,6 +581,7 @@ async function updateBaseLive() {
     return;
   }
 
+  lastValidCalc.base = null;
   try {
     const result = await invoke("calc_original", { value: x, percent: y });
     if (ticket !== seq.base) return;
@@ -633,6 +644,7 @@ async function updateMarkupLive() {
     return;
   }
 
+  lastValidCalc.markup = null;
   try {
     const result = await invoke("calc_markup_margin", {
       cost,
@@ -737,6 +749,7 @@ async function updateTaxLive() {
     return;
   }
 
+  lastValidCalc.tax = null;
   try {
     const result = await invoke("calc_tax", {
       amount,
@@ -1196,13 +1209,13 @@ async function loadSettingsAndMaybeCheckUpdates(isSmokeMode = false) {
     const loaded = await invoke("get_settings");
     if (loaded && typeof loaded.checkUpdatesOnStartup === "boolean") {
       loadedSettings = loaded;
-      lastPersistedSettings = { ...loadedSettings };
     }
   } catch {
-    loadedSettings = { checkUpdatesOnStartup: true };
+    loadedSettings = { checkUpdatesOnStartup: false };
   }
 
   if (ticket === settingsSeq) {
+    lastPersistedSettings = { ...loadedSettings };
     currentSettings = { ...loadedSettings };
     const toggle = document.getElementById("autoUpdateToggle");
     if (toggle) {
@@ -1640,7 +1653,7 @@ async function runSmokeTestIfRequested(smokeEnabledArg) {
 
     const appInfo = await invoke("get_app_info");
     check("app-name", appInfo.name === "Percentage Calculator Tool");
-    check("app-version", appInfo.version === "2.2.0");
+    check("app-version", appInfo.version === "2.2.1");
     check(
       "app-credits",
       appInfo.credits.includes("Mohamed Sayed") &&
@@ -1651,7 +1664,7 @@ async function runSmokeTestIfRequested(smokeEnabledArg) {
       "footer-version",
       document
         .getElementById("appVersion")
-        .textContent.includes("Desktop v2.2.0")
+        .textContent.includes("Desktop v2.2.1")
     );
 
     const quickLinks = Array.from(document.querySelectorAll(".quick-nav .quick-link"));

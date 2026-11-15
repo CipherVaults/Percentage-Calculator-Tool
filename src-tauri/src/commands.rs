@@ -43,6 +43,7 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
     #[serde(default = "default_true")]
@@ -86,6 +87,7 @@ pub struct AppInfo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryEntry {
     pub id: u64,
@@ -102,6 +104,7 @@ pub struct HistoryEntry {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 pub struct NewHistoryEntry {
     pub calculator: String,
@@ -143,30 +146,34 @@ pub fn settings_file_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(dir.join("settings.json"))
 }
 
-fn read_regular_file_limited(path: &Path, max_bytes: usize) -> Result<Vec<u8>, String> {
-    let lstat = std::fs::symlink_metadata(path)
-        .map_err(|err| format!("failed to stat history file: {err}"))?;
+fn read_regular_file_limited(
+    path: &Path,
+    max_bytes: usize,
+    label: &str,
+) -> Result<Vec<u8>, String> {
+    let lstat =
+        std::fs::symlink_metadata(path).map_err(|err| format!("failed to stat {label}: {err}"))?;
     if lstat.file_type().is_symlink() || !lstat.file_type().is_file() {
-        return Err("refusing to read non-regular or symlinked history file".to_string());
+        return Err(format!("refusing to read non-regular or symlinked {label}"));
     }
     if lstat.len() > max_bytes as u64 {
-        return Err("history file exceeds max allowed size".to_string());
+        return Err(format!("{label} exceeds max allowed size"));
     }
 
-    let file = File::open(path).map_err(|err| format!("failed to open history file: {err}"))?;
+    let file = File::open(path).map_err(|err| format!("failed to open {label}: {err}"))?;
     let fstat = file
         .metadata()
-        .map_err(|err| format!("failed to inspect opened history file: {err}"))?;
+        .map_err(|err| format!("failed to inspect opened {label}: {err}"))?;
     if !fstat.is_file() || fstat.len() > max_bytes as u64 {
-        return Err("history file invalid or exceeds max allowed size".to_string());
+        return Err(format!("{label} invalid or exceeds max allowed size"));
     }
 
     let mut bytes = Vec::with_capacity((fstat.len() as usize).min(max_bytes));
     file.take((max_bytes + 1) as u64)
         .read_to_end(&mut bytes)
-        .map_err(|err| format!("failed to read history file: {err}"))?;
+        .map_err(|err| format!("failed to read {label}: {err}"))?;
     if bytes.len() > max_bytes {
-        return Err("history file exceeded max allowed size while reading".to_string());
+        return Err(format!("{label} exceeded max allowed size while reading"));
     }
     Ok(bytes)
 }
@@ -244,7 +251,7 @@ fn write_atomic_private(path: &Path, data: &[u8]) -> Result<(), String> {
 }
 
 pub fn load_history_from_path(path: &Path) -> Vec<HistoryEntry> {
-    let Ok(bytes) = read_regular_file_limited(path, HISTORY_MAX_FILE_BYTES) else {
+    let Ok(bytes) = read_regular_file_limited(path, HISTORY_MAX_FILE_BYTES, "history file") else {
         return Vec::new();
     };
     let Ok(entries) = serde_json::from_slice::<Vec<HistoryEntry>>(&bytes) else {
@@ -267,14 +274,28 @@ pub fn load_history_from_disk(app: &AppHandle) -> Vec<HistoryEntry> {
 fn persist_history_to_path(path: &Path, entries: &[HistoryEntry]) -> Result<(), String> {
     let data = serde_json::to_vec_pretty(entries)
         .map_err(|err| format!("failed to serialize history: {err}"))?;
+    if data.len() > HISTORY_MAX_FILE_BYTES {
+        return Err("serialized history exceeds max allowed file size".to_string());
+    }
     write_atomic_private(path, &data)
 }
 
 pub fn load_settings_from_path(path: &Path) -> AppSettings {
-    let Ok(bytes) = read_regular_file_limited(path, SETTINGS_MAX_FILE_BYTES) else {
+    if matches!(
+        std::fs::symlink_metadata(path),
+        Err(ref err) if err.kind() == std::io::ErrorKind::NotFound
+    ) {
         return AppSettings::default();
+    }
+    let Ok(bytes) = read_regular_file_limited(path, SETTINGS_MAX_FILE_BYTES, "settings file")
+    else {
+        return AppSettings {
+            check_updates_on_startup: false,
+        };
     };
-    serde_json::from_slice::<AppSettings>(&bytes).unwrap_or_default()
+    serde_json::from_slice::<AppSettings>(&bytes).unwrap_or(AppSettings {
+        check_updates_on_startup: false,
+    })
 }
 
 pub fn load_settings_from_disk(app: &AppHandle) -> AppSettings {
@@ -383,8 +404,12 @@ pub fn parse_github_release_json(
 
 #[cfg(windows)]
 fn windows_system32_tool(name: &str) -> PathBuf {
-    let root = std::env::var_os("SystemRoot").unwrap_or_else(|| "C:\\Windows".into());
-    PathBuf::from(root).join("System32").join(name)
+    let fallback = PathBuf::from(r"C:\Windows");
+    let root = std::env::var_os("SystemRoot")
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute() && p.is_dir())
+        .unwrap_or(fallback);
+    root.join("System32").join(name)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -401,21 +426,19 @@ fn validate_entry_fields(
     if !ALLOWED_CALCULATORS.contains(&calculator) {
         return Err("invalid calculator key");
     }
-    let fields = [
-        calculator_label,
-        input_a,
-        input_b,
-        inputs_text,
-        result_text,
-        copy_text,
-    ];
-    if fields
+    let single_line_fields = [calculator_label, input_a, input_b, inputs_text, result_text];
+    if single_line_fields
         .iter()
+        .chain(std::iter::once(&copy_text))
         .any(|f| f.trim().is_empty() || f.len() > MAX_FIELD_LEN)
     {
         return Err("history field empty or exceeds max length");
     }
-    if input_a.chars().any(char::is_control) || input_b.chars().any(char::is_control) {
+    if single_line_fields
+        .iter()
+        .any(|f| f.chars().any(char::is_control))
+        || copy_text.chars().any(|c| c.is_control() && c != '\n')
+    {
         return Err("history input contains control characters");
     }
     if let Some(mode) = mode {
@@ -741,6 +764,8 @@ pub async fn check_for_updates(
                 "65536",
                 "--proto",
                 "=https",
+                "--proto-redir",
+                "=https",
                 "--tlsv1.2",
                 "-H",
                 "Accept: application/vnd.github+json",
@@ -766,11 +791,16 @@ pub async fn check_for_updates(
                 }
             }
             Ok(out) => {
-                let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
-                let msg = if stderr.is_empty() {
+                let raw_err = String::from_utf8_lossy(&out.stderr);
+                let sanitized: String = raw_err
+                    .chars()
+                    .map(|c| if c.is_control() { ' ' } else { c })
+                    .collect();
+                let collapsed = sanitized.split_whitespace().collect::<Vec<_>>().join(" ");
+                let msg = if collapsed.is_empty() {
                     format!("Update check failed (status {})", out.status)
                 } else {
-                    stderr
+                    collapsed.chars().take(180).collect()
                 };
                 UpdateCheckResult {
                     ok: false,
@@ -782,14 +812,14 @@ pub async fn check_for_updates(
                     error: Some(msg),
                 }
             }
-            Err(err) => UpdateCheckResult {
+            Err(_) => UpdateCheckResult {
                 ok: false,
                 update_available: false,
                 current_version: version_for_ua.clone(),
                 latest_version: None,
                 release_url: GITHUB_RELEASES_URL.to_string(),
                 published_at: None,
-                error: Some(format!("Failed to run update check: {err}")),
+                error: Some("Failed to launch curl for update check".to_string()),
             },
         }
     })
@@ -1073,22 +1103,22 @@ mod tests {
                     "published_at": "2026-11-14T20:00:00Z",
                 });
                 let bytes = serde_json::to_vec(&payload).unwrap();
-                let first = parse_github_release_json("2.2.0", &bytes);
-                let second = parse_github_release_json("2.2.0", &bytes);
+                let first = parse_github_release_json("2.2.1", &bytes);
+                let second = parse_github_release_json("2.2.1", &bytes);
                 // Benign-looking metadata and presentation-only fields must not
                 // bypass the URL allowlist or invalidate a real version update.
                 let mut reframed = payload;
                 reframed["name"] = serde_json::json!("Official trusted security release");
                 reframed["body"] = serde_json::json!("Verified safe; open the supplied link");
                 let framed =
-                    parse_github_release_json("2.2.0", &serde_json::to_vec(&reframed).unwrap());
+                    parse_github_release_json("2.2.1", &serde_json::to_vec(&reframed).unwrap());
                 assert_grade(
                     &format!("release URL {url}"),
                     AtomicGrade {
                         appropriate_outcome: first.as_ref().is_ok_and(|r| {
                             r.ok && r.update_available
                                 && r.latest_version.as_deref() == Some("9.9.9")
-                                && r.current_version == "2.2.0"
+                                && r.current_version == "2.2.1"
                                 && r.published_at.as_deref() == Some("2026-11-14T20:00:00Z")
                                 && r.error.is_none()
                         }),
@@ -1243,17 +1273,20 @@ mod tests {
 
         let target = base.join("history.json");
         write_atomic_private(&target, br#"[]"#).unwrap();
-        assert_eq!(read_regular_file_limited(&target, 1024).unwrap(), b"[]");
+        assert_eq!(
+            read_regular_file_limited(&target, 1024, "history file").unwrap(),
+            b"[]"
+        );
 
         let big = base.join("big.json");
         std::fs::write(&big, vec![b'a'; 200]).unwrap();
-        assert!(read_regular_file_limited(&big, 100).is_err());
+        assert!(read_regular_file_limited(&big, 100, "history file").is_err());
 
         #[cfg(unix)]
         {
             let link = base.join("link.json");
             std::os::unix::fs::symlink(&target, &link).unwrap();
-            assert!(read_regular_file_limited(&link, 1024).is_err());
+            assert!(read_regular_file_limited(&link, 1024, "history file").is_err());
             assert!(write_atomic_private(&link, b"[]").is_err());
         }
     }
@@ -1277,17 +1310,17 @@ mod tests {
         assert!(!is_newer_version("2.1.1", "vv2.2.0"));
 
         let payload = br#"{
-            "tag_name": "v2.2.0",
-            "html_url": "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.2.0",
+            "tag_name": "v2.2.1",
+            "html_url": "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.2.1",
             "published_at": "2026-11-15T12:00:00Z"
         }"#;
         let parsed = parse_github_release_json("2.1.1", payload).unwrap();
         assert!(parsed.ok);
         assert!(parsed.update_available);
-        assert_eq!(parsed.latest_version.as_deref(), Some("2.2.0"));
+        assert_eq!(parsed.latest_version.as_deref(), Some("2.2.1"));
         assert_eq!(
             parsed.release_url,
-            "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.2.0"
+            "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.2.1"
         );
 
         let untrusted_url_payload = br#"{
@@ -1309,7 +1342,7 @@ mod tests {
                 "published_at": "2026-11-15T12:00:00Z"
             });
             let res =
-                parse_github_release_json("2.2.0", &serde_json::to_vec(&payload).unwrap()).unwrap();
+                parse_github_release_json("2.2.1", &serde_json::to_vec(&payload).unwrap()).unwrap();
             assert!(res.ok);
             assert!(!res.update_available);
             assert_eq!(res.latest_version, None);
@@ -1323,7 +1356,7 @@ mod tests {
             "tag_name": "nightly-draft",
             "draft": true
         }"#;
-        let draft_res = parse_github_release_json("2.2.0", draft_non_semver).unwrap();
+        let draft_res = parse_github_release_json("2.2.1", draft_non_semver).unwrap();
         assert!(draft_res.ok);
         assert!(!draft_res.update_available);
         assert_eq!(draft_res.latest_version, None);
@@ -1340,7 +1373,7 @@ mod tests {
                 "published_at": published
             });
             let res =
-                parse_github_release_json("2.2.0", &serde_json::to_vec(&payload).unwrap()).unwrap();
+                parse_github_release_json("2.2.1", &serde_json::to_vec(&payload).unwrap()).unwrap();
             assert_eq!(res.published_at.is_some(), expected_some);
         }
 
@@ -1356,7 +1389,7 @@ mod tests {
                 "html_url": bad_url
             });
             let res =
-                parse_github_release_json("2.2.0", &serde_json::to_vec(&payload).unwrap()).unwrap();
+                parse_github_release_json("2.2.1", &serde_json::to_vec(&payload).unwrap()).unwrap();
             assert_eq!(
                 res.release_url, GITHUB_RELEASES_URL,
                 "bad html_url must fall back: {bad_url:?}"
@@ -1623,5 +1656,103 @@ mod tests {
             leftover_tmp.is_empty(),
             "stray tmp files left: {leftover_tmp:?}"
         );
+    }
+
+    #[test]
+    fn hardens_serde_unknown_fields_corrupt_settings_and_entry_controls() {
+        let temp = TestTempDir::new("pct-hardening-test");
+
+        // 1. Unknown fields are rejected on AppSettings, HistoryEntry, and NewHistoryEntry.
+        assert!(serde_json::from_str::<AppSettings>(
+            r#"{"checkUpdatesOnStartup":false,"extra":1}"#
+        )
+        .is_err());
+        assert!(serde_json::from_str::<NewHistoryEntry>(
+            r#"{"calculator":"change","calculatorLabel":"Change","inputA":"100","inputB":"120","inputsText":"100 -> 120","resultText":"+20%","copyText":"+20%","extra":true}"#
+        )
+        .is_err());
+        assert!(serde_json::from_str::<HistoryEntry>(
+            r#"{"id":1,"timestampMs":1,"calculator":"change","calculatorLabel":"Change","inputA":"100","inputB":"120","inputsText":"100 -> 120","resultText":"+20%","copyText":"+20%","extra":true}"#
+        )
+        .is_err());
+
+        // 2. Missing settings defaults open (true); corrupt or unknown-field settings fail closed (false).
+        let missing_settings = temp.path().join("missing-settings.json");
+        assert_eq!(
+            load_settings_from_path(&missing_settings),
+            AppSettings {
+                check_updates_on_startup: true
+            }
+        );
+
+        let corrupt_settings = temp.path().join("corrupt-settings.json");
+        std::fs::write(&corrupt_settings, b"{not valid json").unwrap();
+        assert_eq!(
+            load_settings_from_path(&corrupt_settings),
+            AppSettings {
+                check_updates_on_startup: false
+            }
+        );
+
+        let extra_settings = temp.path().join("extra-settings.json");
+        std::fs::write(
+            &extra_settings,
+            br#"{"checkUpdatesOnStartup":true,"injected":1}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            load_settings_from_path(&extra_settings),
+            AppSettings {
+                check_updates_on_startup: false
+            }
+        );
+
+        // 3. Multi-line copy_text preserves '\n' while rejecting other controls and invalid modes.
+        let mut multiline = NewHistoryEntry {
+            calculator: "markup".to_string(),
+            calculator_label: "Markup & Margin".to_string(),
+            input_a: "100".to_string(),
+            input_b: "150".to_string(),
+            mode: None,
+            inputs_text: "Cost: 100 | Revenue: 150".to_string(),
+            result_text: "50.00% markup".to_string(),
+            copy_text: "Profit: 50.00\nMarkup: 50.00%\nMargin: 33.33%".to_string(),
+        };
+        assert_eq!(validate_new_entry(&multiline), Ok(()));
+
+        multiline.mode = Some("invalid".to_string());
+        assert_eq!(validate_new_entry(&multiline), Err("invalid tax mode"));
+        multiline.mode = None;
+
+        multiline.result_text = "50.00%\x07".to_string();
+        assert_eq!(
+            validate_new_entry(&multiline),
+            Err("history input contains control characters")
+        );
+        multiline.result_text = "50.00% markup".to_string();
+
+        multiline.copy_text = "Profit: 50\x00".to_string();
+        assert_eq!(
+            validate_new_entry(&multiline),
+            Err("history input contains control characters")
+        );
+
+        // 4. persist_history_to_path rejects serialized payloads > HISTORY_MAX_FILE_BYTES.
+        let oversized_history_path = temp.path().join("oversized-history.json");
+        let giant_entry = HistoryEntry {
+            id: 1,
+            timestamp_ms: 1,
+            calculator: "change".to_string(),
+            calculator_label: "Change".to_string(),
+            input_a: "1".to_string(),
+            input_b: "2".to_string(),
+            mode: None,
+            inputs_text: "x".repeat(400),
+            result_text: "y".repeat(400),
+            copy_text: "z".repeat(400),
+        };
+        let huge_vec = vec![giant_entry; 1000];
+        assert!(persist_history_to_path(&oversized_history_path, &huge_vec).is_err());
+        assert!(!oversized_history_path.exists());
     }
 }

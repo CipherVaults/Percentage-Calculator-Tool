@@ -57,8 +57,10 @@ jobs:
 
             const styleHash = crypto.createHash("sha256").update(styleMatch[1], "utf8").digest("base64");
             const scriptHash = crypto.createHash("sha256").update(scriptMatch[1], "utf8").digest("base64");
-            assert(csp.includes(`'\''sha256-${styleHash}'\''`), `CSP missing style hash sha256-${styleHash}`);
-            assert(csp.includes(`'\''sha256-${scriptHash}'\''`), `CSP missing script hash sha256-${scriptHash}`);
+            const styleDir = csp.split(";").map(s => s.trim()).find(s => s.startsWith("style-src "));
+            const scriptDir = csp.split(";").map(s => s.trim()).find(s => s.startsWith("script-src "));
+            assert(styleDir && styleDir.includes(`'\''sha256-${styleHash}'\''`), `CSP style-src missing sha256-${styleHash}`);
+            assert(scriptDir && scriptDir.includes(`'\''sha256-${scriptHash}'\''`), `CSP script-src missing sha256-${scriptHash}`);
             assert(!/frame-ancestors/i.test(csp), "CSP <meta> must not include frame-ancestors");
 
             const uiMain = fs.readFileSync("ui/main.js", "utf8");
@@ -201,9 +203,15 @@ jobs:
         run: |
           $conf = Get-Content "src-tauri/tauri.conf.json" -Raw | ConvertFrom-Json
           $ver = $conf.version
+          Remove-Item -Recurse -Force -ErrorAction SilentlyContinue dist
           New-Item -ItemType Directory -Force -Path dist/Installer, dist/Portable, dist/Mobile | Out-Null
-          Copy-Item "target/release/bundle/nsis/*setup*.exe" "dist/Installer/"
-          Copy-Item "target/release/bundle/msi/*.msi" "dist/Installer/"
+          $nsis = Get-ChildItem -Path "target/release/bundle/nsis" -Filter "*${ver}*setup*.exe" -File
+          $msi = Get-ChildItem -Path "target/release/bundle/msi" -Filter "*${ver}*.msi" -File
+          if ($nsis.Count -ne 1 -or $msi.Count -ne 1) {
+            throw "Expected exactly 1 NSIS setup and 1 MSI installer matching version $ver (got nsis=$($nsis.Count), msi=$($msi.Count))."
+          }
+          Copy-Item $nsis[0].FullName "dist/Installer/"
+          Copy-Item $msi[0].FullName "dist/Installer/"
           Copy-Item "target/release/percentage-calculator-tool.exe" "dist/Portable/Percentage.Calculator.Tool.Portable.$ver.exe"
           Copy-Item "mobile/index.html" "dist/Mobile/Percentage.Calculator.Tool.Mobile.$ver.html"
 
@@ -248,10 +256,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          VERSION="${{ needs.windows-build.outputs.version }}"
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             TAG="$GITHUB_REF_NAME"
+            if [[ "$TAG" != "v${VERSION}" ]]; then
+              echo "Tag ${TAG} does not match app version v${VERSION}; aborting release." >&2
+              exit 1
+            fi
           else
-            TAG="v${{ needs.windows-build.outputs.version }}"
+            TAG="v${VERSION}"
           fi
 
           shopt -s nullglob
@@ -262,16 +275,15 @@ jobs:
             dist/Mobile/*.html
             dist/SHA256SUMS.txt
           )
-          test "${#ASSETS[@]}" -ge 5
+          test "${#ASSETS[@]}" -eq 5
 
           NOTES_FILE=".github/release-notes-${TAG}.md"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists; moving tag $TAG to $GITHUB_SHA and updating assets, release notes, and SHA256SUMS.txt."
-            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/${TAG}" -f "sha=${GITHUB_SHA}" -F force=true
-            gh release upload "$TAG" "${ASSETS[@]}" --clobber
-            if [[ -f "$NOTES_FILE" ]]; then
-              gh release edit "$TAG" --notes-file "$NOTES_FILE"
+            if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+              echo "Release $TAG already exists; refusing to overwrite or move an existing release tag." >&2
+              exit 1
             fi
+            echo "Release $TAG already exists; preserving immutable tag and assets. Bump version to publish a new release."
             exit 0
           fi
 

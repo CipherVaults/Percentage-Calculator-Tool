@@ -64,16 +64,35 @@ const CALC_INPUT_IDS = [
   "taxRate"
 ];
 
+const ALLOWED_CALCULATORS = new Set([
+  "change",
+  "percent",
+  "what",
+  "discount",
+  "base",
+  "markup",
+  "tax"
+]);
+const FINITE_DECIMAL_RE = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i;
+
+function isFiniteDecimalString(value) {
+  return (
+    typeof value === "string" &&
+    FINITE_DECIMAL_RE.test(value) &&
+    Number.isFinite(Number(value))
+  );
+}
+
 function sanitizeNumericString(raw) {
   if (typeof raw !== "string") return "";
   const trimmed = raw.trim();
   if (!trimmed) return "";
   let cleaned = trimmed.replace(/[\s_,$€£¥₹₩₽₺₫₪₱฿%]+/g, "");
   cleaned = cleaned.replace(
-    /^(?:USD|EUR|GBP|JPY|CAD|AUD|CHF|INR)(?=[-+]?\d|\.)/i,
-    ""
+    /^(?:([+-])(?:USD|EUR|GBP|JPY|CAD|AUD|CHF|INR)(?=\d|\.)|(?:USD|EUR|GBP|JPY|CAD|AUD|CHF|INR)(?=[+-]?(?:\d|\.)))/i,
+    "$1"
   );
-  if (cleaned.startsWith("+")) {
+  if (/^\+(?:\d|\.)/.test(cleaned)) {
     cleaned = cleaned.slice(1);
   }
   return cleaned;
@@ -89,7 +108,7 @@ function getNumber(id) {
   const el = document.getElementById(id);
   if (!el) return null;
   const cleaned = sanitizeNumericString(el.value);
-  if (cleaned === "") return null;
+  if (cleaned === "" || !FINITE_DECIMAL_RE.test(cleaned)) return null;
   const num = Number(cleaned);
   return Number.isNaN(num) ? null : num;
 }
@@ -100,7 +119,7 @@ function getRawInput(id) {
 }
 
 function attachPasteSanitizers() {
-  const plainNumberRe = /^-?\d*\.?\d+(?:[eE][-+]?\d+)?$/;
+  const plainNumberRe = /^-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i;
   CALC_INPUT_IDS.forEach((id) => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -108,9 +127,14 @@ function attachPasteSanitizers() {
       const rawText = event.clipboardData?.getData("text");
       if (typeof rawText !== "string") return;
       const trimmed = rawText.trim();
-      if (!trimmed || plainNumberRe.test(trimmed)) return;
+      if (
+        !trimmed ||
+        (plainNumberRe.test(trimmed) && Number.isFinite(Number(trimmed)))
+      ) {
+        return;
+      }
       const cleaned = sanitizeNumericString(trimmed);
-      if (cleaned !== "" && !Number.isNaN(Number(cleaned))) {
+      if (isFiniteDecimalString(cleaned)) {
         event.preventDefault();
         el.value = cleaned;
         el.dispatchEvent(new Event("input", { bubbles: true }));
@@ -120,6 +144,13 @@ function attachPasteSanitizers() {
 }
 
 function buildValidHistoryCandidate(candidate) {
+  if (
+    !candidate ||
+    typeof candidate !== "object" ||
+    !ALLOWED_CALCULATORS.has(candidate.calculator)
+  ) {
+    return null;
+  }
   const fields = [
     candidate.calculatorLabel,
     candidate.inputA,
@@ -134,7 +165,12 @@ function buildValidHistoryCandidate(candidate) {
       v.trim().length > 0 &&
       v.length <= MAX_FIELD_LEN
   );
-  return valid ? candidate : null;
+  if (!valid) return null;
+  const mode = candidate.mode ?? null;
+  if (mode !== null && mode !== "add" && mode !== "extract") {
+    return null;
+  }
+  return candidate;
 }
 
 function setLines(el, lines) {
@@ -263,10 +299,18 @@ function setCardOutOfRange(
   setResult(resultId, "Value out of range", true);
 }
 
-function allFiniteValues(obj, keys) {
+function allFiniteValues(obj, keys, textKeys = []) {
   return (
     Boolean(obj) &&
-    keys.every((k) => typeof obj[k] === "number" && Number.isFinite(obj[k]))
+    keys.every(
+      (k) =>
+        typeof obj[k] === "number" &&
+        Number.isFinite(obj[k]) &&
+        Number.isFinite(obj[k] * 100)
+    ) &&
+    textKeys.every(
+      (k) => typeof obj[k] === "string" && !obj[k].includes("Infinity")
+    )
   );
 }
 
@@ -306,7 +350,7 @@ async function updateChangeLive() {
       return;
     }
 
-    if (!allFiniteValues(result, ["value"])) {
+    if (!allFiniteValues(result, ["value"], ["label", "liveResult"])) {
       setCardOutOfRange("change", formulaDiv, resultSpan, "changeResult", defaultFormula);
       return;
     }
@@ -315,7 +359,7 @@ async function updateChangeLive() {
     resultSpan.textContent = `→ ${result.liveResult}`;
     setResult("changeResult", result.label);
 
-    lastValidCalc.change = buildValidHistoryCandidate({
+    lastValidCalc.change = {
       calculator: "change",
       calculatorLabel: "Percentage Change",
       inputA: getRawInput("changeOrig"),
@@ -324,7 +368,7 @@ async function updateChangeLive() {
       inputsText: `${orig} → ${newVal}`,
       resultText: result.label,
       copyText: result.label
-    });
+    };
   } catch {
     if (ticket !== seq.change) return;
     setCardOutOfRange("change", formulaDiv, resultSpan, "changeResult", defaultFormula);
@@ -364,7 +408,7 @@ async function updatePercentLive() {
       return;
     }
 
-    if (!allFiniteValues(result, ["value"])) {
+    if (!allFiniteValues(result, ["value"], ["label", "liveResult"])) {
       setCardOutOfRange("percent", formulaDiv, resultSpan, "percentResult", defaultFormula);
       return;
     }
@@ -373,7 +417,7 @@ async function updatePercentLive() {
     resultSpan.textContent = `→ ${result.label}`;
     setResult("percentResult", result.label);
 
-    lastValidCalc.percent = buildValidHistoryCandidate({
+    lastValidCalc.percent = {
       calculator: "percent",
       calculatorLabel: "Percentage of Total",
       inputA: getRawInput("isWhatX"),
@@ -382,7 +426,7 @@ async function updatePercentLive() {
       inputsText: `${x} of ${y}`,
       resultText: result.label,
       copyText: result.label
-    });
+    };
   } catch {
     if (ticket !== seq.percent) return;
     setCardOutOfRange("percent", formulaDiv, resultSpan, "percentResult", defaultFormula);
@@ -414,7 +458,7 @@ async function updateWhatLive() {
     const result = await invoke("calc_portion", { percent: x, number: y });
     if (ticket !== seq.what) return;
 
-    if (!allFiniteValues(result, ["value"])) {
+    if (!allFiniteValues(result, ["value"], ["label", "liveResult"])) {
       setCardOutOfRange("what", formulaDiv, resultSpan, "whatResult", defaultFormula);
       return;
     }
@@ -423,7 +467,7 @@ async function updateWhatLive() {
     resultSpan.textContent = `→ ${result.label}`;
     setResult("whatResult", result.label);
 
-    lastValidCalc.what = buildValidHistoryCandidate({
+    lastValidCalc.what = {
       calculator: "what",
       calculatorLabel: "Calculate Percentage",
       inputA: getRawInput("whatX"),
@@ -432,7 +476,7 @@ async function updateWhatLive() {
       inputsText: `${x}% of ${y}`,
       resultText: result.label,
       copyText: result.label
-    });
+    };
   } catch {
     if (ticket !== seq.what) return;
     setCardOutOfRange("what", formulaDiv, resultSpan, "whatResult", defaultFormula);
@@ -470,7 +514,13 @@ async function updateDiscountLive() {
     });
     if (ticket !== seq.discount) return;
 
-    if (!allFiniteValues(result, ["finalPrice", "saved"])) {
+    if (
+      !allFiniteValues(
+        result,
+        ["finalPrice", "saved"],
+        ["finalText", "savedText", "label", "copyText"]
+      )
+    ) {
       setCardOutOfRange("discount", formulaDiv, resultSpan, "discountResult", defaultLines);
       return;
     }
@@ -482,7 +532,7 @@ async function updateDiscountLive() {
     resultSpan.textContent = `→ final: ${result.finalText} | saved: ${result.savedText}`;
     setResult("discountResult", result.label);
 
-    lastValidCalc.discount = buildValidHistoryCandidate({
+    lastValidCalc.discount = {
       calculator: "discount",
       calculatorLabel: "Discount",
       inputA: getRawInput("discountPrice"),
@@ -491,7 +541,7 @@ async function updateDiscountLive() {
       inputsText: `${price} (−${disc}%)`,
       resultText: `Final: ${result.finalText} · Saved: ${result.savedText}`,
       copyText: result.copyText
-    });
+    };
   } catch {
     if (ticket !== seq.discount) return;
     setCardOutOfRange("discount", formulaDiv, resultSpan, "discountResult", defaultLines);
@@ -531,7 +581,7 @@ async function updateBaseLive() {
       return;
     }
 
-    if (!allFiniteValues(result, ["value"])) {
+    if (!allFiniteValues(result, ["value"], ["label", "liveResult"])) {
       setCardOutOfRange("base", formulaDiv, resultSpan, "baseResult", defaultFormula);
       return;
     }
@@ -540,7 +590,7 @@ async function updateBaseLive() {
     resultSpan.textContent = `→ ${result.label}`;
     setResult("baseResult", result.label);
 
-    lastValidCalc.base = buildValidHistoryCandidate({
+    lastValidCalc.base = {
       calculator: "base",
       calculatorLabel: "Find Original Value",
       inputA: getRawInput("baseX"),
@@ -549,7 +599,7 @@ async function updateBaseLive() {
       inputsText: `${x} is ${y}%`,
       resultText: result.label,
       copyText: result.label
-    });
+    };
   } catch {
     if (ticket !== seq.base) return;
     setCardOutOfRange("base", formulaDiv, resultSpan, "baseResult", defaultFormula);
@@ -600,7 +650,13 @@ async function updateMarkupLive() {
       return;
     }
 
-    if (!allFiniteValues(result, ["profit", "markup", "margin"])) {
+    if (
+      !allFiniteValues(
+        result,
+        ["profit", "markup", "margin"],
+        ["profitText", "markupText", "marginText", "label", "liveResult", "copyText"]
+      )
+    ) {
       setCardOutOfRange("markup", formulaDiv, resultSpan, "markupResult", defaultLines);
       return;
     }
@@ -613,7 +669,7 @@ async function updateMarkupLive() {
     resultSpan.textContent = `→ ${result.liveResult}`;
     setResult("markupResult", result.label);
 
-    lastValidCalc.markup = buildValidHistoryCandidate({
+    lastValidCalc.markup = {
       calculator: "markup",
       calculatorLabel: "Markup & Margin",
       inputA: getRawInput("markupCost"),
@@ -622,7 +678,7 @@ async function updateMarkupLive() {
       inputsText: `Cost ${cost} → Price ${price}`,
       resultText: `Profit: ${result.profitText} · Markup: ${result.markupText} · Margin: ${result.marginText}`,
       copyText: result.copyText
-    });
+    };
   } catch {
     if (ticket !== seq.markup) return;
     setCardOutOfRange("markup", formulaDiv, resultSpan, "markupResult", defaultLines);
@@ -699,7 +755,13 @@ async function updateTaxLive() {
       return;
     }
 
-    if (!allFiniteValues(result, ["net", "tax", "total"])) {
+    if (
+      !allFiniteValues(
+        result,
+        ["net", "tax", "total"],
+        ["netText", "taxText", "totalText", "label", "liveResult", "copyText"]
+      )
+    ) {
       setCardOutOfRange("tax", formulaDiv, resultSpan, "taxResult", defaultLines);
       return;
     }
@@ -718,7 +780,7 @@ async function updateTaxLive() {
     resultSpan.textContent = `→ ${result.liveResult}`;
     setResult("taxResult", result.label);
 
-    lastValidCalc.tax = buildValidHistoryCandidate({
+    lastValidCalc.tax = {
       calculator: "tax",
       calculatorLabel: mode === "extract" ? "Tax / VAT (Extract)" : "Tax / VAT (Add)",
       inputA: getRawInput("taxAmount"),
@@ -733,7 +795,7 @@ async function updateTaxLive() {
           ? `Net: ${result.netText} · Tax: ${result.taxText}`
           : `Total: ${result.totalText} · Tax: ${result.taxText}`,
       copyText: result.copyText
-    });
+    };
   } catch {
     if (ticket !== seq.tax) return;
     setCardOutOfRange("tax", formulaDiv, resultSpan, "taxResult", defaultLines);
@@ -925,7 +987,7 @@ async function deleteHistoryEntry(id) {
 }
 
 async function recordHistoryFor(key) {
-  const entry = lastValidCalc[key];
+  const entry = buildValidHistoryCandidate(lastValidCalc[key]);
   if (!entry) return;
   try {
     const updated = await invoke("history_add", { entry });
@@ -1021,6 +1083,8 @@ async function syncAppInfo() {
 }
 
 let currentSettings = { checkUpdatesOnStartup: true };
+let lastPersistedSettings = { checkUpdatesOnStartup: true };
+let settingsSeq = 0;
 let latestReleaseUrl = RELEASE_URL;
 
 function openSettingsModal() {
@@ -1084,8 +1148,13 @@ function applyUpdateResult(result, showNoUpdateMessage = true) {
   } else {
     hideUpdateBanner();
     if (showNoUpdateMessage) {
-      const tag = result.latestVersion || result.currentVersion;
-      setUpdateStatus(`Up to date — running Desktop v${tag}.`, false);
+      const tag = result.currentVersion || result.latestVersion;
+      setUpdateStatus(
+        tag
+          ? `Up to date — running Desktop v${tag}.`
+          : "Up to date — running the latest Desktop build.",
+        false
+      );
     }
   }
 }
@@ -1119,18 +1188,24 @@ async function openReleasePage() {
 }
 
 async function loadSettingsAndMaybeCheckUpdates(isSmokeMode = false) {
+  const ticket = ++settingsSeq;
+  let loadedSettings = { checkUpdatesOnStartup: true };
   try {
     const loaded = await invoke("get_settings");
     if (loaded && typeof loaded.checkUpdatesOnStartup === "boolean") {
-      currentSettings = loaded;
+      loadedSettings = loaded;
+      lastPersistedSettings = { ...loadedSettings };
     }
   } catch {
-    currentSettings = { checkUpdatesOnStartup: true };
+    loadedSettings = { checkUpdatesOnStartup: true };
   }
 
-  const toggle = document.getElementById("autoUpdateToggle");
-  if (toggle) {
-    toggle.checked = Boolean(currentSettings.checkUpdatesOnStartup);
+  if (ticket === settingsSeq) {
+    currentSettings = { ...loadedSettings };
+    const toggle = document.getElementById("autoUpdateToggle");
+    if (toggle) {
+      toggle.checked = Boolean(currentSettings.checkUpdatesOnStartup);
+    }
   }
 
   if (currentSettings.checkUpdatesOnStartup && !isSmokeMode) {
@@ -1181,14 +1256,24 @@ function bindControls() {
   document
     .getElementById("autoUpdateToggle")
     ?.addEventListener("change", async (event) => {
-      const checked = Boolean(event.currentTarget.checked);
-      currentSettings = { checkUpdatesOnStartup: checked };
+      const toggle = event.currentTarget;
+      const ticket = ++settingsSeq;
+      const next = { checkUpdatesOnStartup: Boolean(toggle.checked) };
       try {
-        currentSettings = await invoke("set_settings", {
-          settings: currentSettings
-        });
+        const saved = await invoke("set_settings", { settings: next });
+        if (ticket !== settingsSeq) return;
+        const persisted =
+          saved && typeof saved.checkUpdatesOnStartup === "boolean"
+            ? saved
+            : next;
+        lastPersistedSettings = { ...persisted };
+        currentSettings = { ...persisted };
+        toggle.checked = Boolean(currentSettings.checkUpdatesOnStartup);
       } catch {
-        // Ignore persistence failures so toggle stays responsive.
+        if (ticket !== settingsSeq) return;
+        currentSettings = { ...lastPersistedSettings };
+        toggle.checked = Boolean(lastPersistedSettings.checkUpdatesOnStartup);
+        setUpdateStatus("Failed to save update setting.", true);
       }
     });
   document

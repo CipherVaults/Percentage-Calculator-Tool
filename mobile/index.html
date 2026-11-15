@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'sha256-HppoWhfVX+UyR2KqXbS6U2Q3KafIo1MVyti/h94cX9o='; script-src 'sha256-655QfOPjmPDnhT1lUo4K5UBkQqBy3BB3EYZt7mnAKdg='; worker-src 'self'; child-src 'self'; img-src 'self' data:; manifest-src 'self'; connect-src 'self' https://api.github.com; object-src 'none'; base-uri 'none'; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'sha256-HppoWhfVX+UyR2KqXbS6U2Q3KafIo1MVyti/h94cX9o='; script-src 'sha256-K2fsVv4rkoUGU32+JEagHwSAYN/GIA3vsXT38Sk3yB0='; worker-src 'self'; child-src 'self'; img-src 'self' data:; manifest-src 'self'; connect-src 'self' https://api.github.com; object-src 'none'; base-uri 'none'; form-action 'none';">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0E0F12">
   <meta name="color-scheme" content="dark">
@@ -1779,16 +1779,26 @@
     "taxRate"
   ];
 
+  const FINITE_DECIMAL_RE = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i;
+
+  function isFiniteDecimalString(value) {
+    return (
+      typeof value === "string" &&
+      FINITE_DECIMAL_RE.test(value) &&
+      Number.isFinite(Number(value))
+    );
+  }
+
   function sanitizeNumericString(raw) {
     if (typeof raw !== "string") return "";
     const trimmed = raw.trim();
     if (!trimmed) return "";
     let cleaned = trimmed.replace(/[\s_,$€£¥₹₩₽₺₫₪₱฿%]+/g, "");
     cleaned = cleaned.replace(
-      /^(?:USD|EUR|GBP|JPY|CAD|AUD|CHF|INR)(?=[-+]?\d|\.)/i,
-      ""
+      /^(?:([+-])(?:USD|EUR|GBP|JPY|CAD|AUD|CHF|INR)(?=\d|\.)|(?:USD|EUR|GBP|JPY|CAD|AUD|CHF|INR)(?=[+-]?(?:\d|\.)))/i,
+      "$1"
     );
-    if (cleaned.startsWith("+")) {
+    if (/^\+(?:\d|\.)/.test(cleaned)) {
       cleaned = cleaned.slice(1);
     }
     return cleaned;
@@ -1809,7 +1819,7 @@
     const el = document.getElementById(id);
     if (!el) return null;
     const cleaned = sanitizeNumericString(el.value);
-    if (cleaned === "") return null;
+    if (cleaned === "" || !FINITE_DECIMAL_RE.test(cleaned)) return null;
     const num = Number(cleaned);
     return Number.isNaN(num) ? null : num;
   }
@@ -1820,7 +1830,7 @@
   }
 
   function attachPasteSanitizers() {
-    const plainNumberRe = /^-?\d*\.?\d+(?:[eE][-+]?\d+)?$/;
+    const plainNumberRe = /^-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i;
     CALC_INPUT_IDS.forEach((id) => {
       const el = document.getElementById(id);
       if (!el) return;
@@ -1828,9 +1838,14 @@
         const rawText = event.clipboardData?.getData("text");
         if (typeof rawText !== "string") return;
         const trimmed = rawText.trim();
-        if (!trimmed || plainNumberRe.test(trimmed)) return;
+        if (
+          !trimmed ||
+          (plainNumberRe.test(trimmed) && Number.isFinite(Number(trimmed)))
+        ) {
+          return;
+        }
         const cleaned = sanitizeNumericString(trimmed);
-        if (cleaned !== "" && !Number.isNaN(Number(cleaned))) {
+        if (isFiniteDecimalString(cleaned)) {
           event.preventDefault();
           el.value = cleaned;
           el.dispatchEvent(new Event("input", { bubbles: true }));
@@ -1981,10 +1996,18 @@
     setResult(resultId, "Value out of range", true);
   }
 
-  function allFiniteValues(obj, keys) {
+  function allFiniteValues(obj, keys, textKeys = []) {
     return (
       Boolean(obj) &&
-      keys.every((k) => typeof obj[k] === "number" && Number.isFinite(obj[k]))
+      keys.every(
+        (k) =>
+          typeof obj[k] === "number" &&
+          Number.isFinite(obj[k]) &&
+          Number.isFinite(obj[k] * 100)
+      ) &&
+      textKeys.every(
+        (k) => typeof obj[k] === "string" && !obj[k].includes("Infinity")
+      )
     );
   }
 
@@ -2028,7 +2051,7 @@
       return;
     }
 
-    if (!allFiniteValues(result, ["value"])) {
+    if (!allFiniteValues(result, ["value"], ["label", "liveResult"])) {
       setCardOutOfRange(
         "change",
         formulaDiv,
@@ -2043,7 +2066,7 @@
     resultSpan.textContent = `→ ${result.liveResult}`;
     setResult("changeResult", result.label);
 
-    lastValidCalc.change = buildValidHistoryCandidate({
+    lastValidCalc.change = {
       calculator: "change",
       calculatorLabel: "Percentage Change",
       inputA: getRawInput("changeOrig"),
@@ -2052,7 +2075,7 @@
       inputsText: `${orig} → ${newVal}`,
       resultText: result.label,
       copyText: result.label
-    });
+    };
   }
 
   function updatePercentLive() {
@@ -2091,7 +2114,7 @@
       return;
     }
 
-    if (!allFiniteValues(result, ["value"])) {
+    if (!allFiniteValues(result, ["value"], ["label", "liveResult"])) {
       setCardOutOfRange(
         "percent",
         formulaDiv,
@@ -2106,7 +2129,7 @@
     resultSpan.textContent = `→ ${result.label}`;
     setResult("percentResult", result.label);
 
-    lastValidCalc.percent = buildValidHistoryCandidate({
+    lastValidCalc.percent = {
       calculator: "percent",
       calculatorLabel: "Percentage of Total",
       inputA: getRawInput("isWhatX"),
@@ -2115,7 +2138,7 @@
       inputsText: `${x} of ${y}`,
       resultText: result.label,
       copyText: result.label
-    });
+    };
   }
 
   function updateWhatLive() {
@@ -2140,7 +2163,7 @@
     }
 
     const result = calcPortion(x, y);
-    if (!allFiniteValues(result, ["value"])) {
+    if (!allFiniteValues(result, ["value"], ["label", "liveResult"])) {
       setCardOutOfRange("what", formulaDiv, resultSpan, "whatResult", defaultFormula);
       return;
     }
@@ -2149,7 +2172,7 @@
     resultSpan.textContent = `→ ${result.label}`;
     setResult("whatResult", result.label);
 
-    lastValidCalc.what = buildValidHistoryCandidate({
+    lastValidCalc.what = {
       calculator: "what",
       calculatorLabel: "Calculate Percentage",
       inputA: getRawInput("whatX"),
@@ -2158,7 +2181,7 @@
       inputsText: `${x}% of ${y}`,
       resultText: result.label,
       copyText: result.label
-    });
+    };
   }
 
   function updateDiscountLive() {
@@ -2192,7 +2215,13 @@
     }
 
     const result = calcDiscount(price, disc);
-    if (!allFiniteValues(result, ["finalPrice", "saved"])) {
+    if (
+      !allFiniteValues(
+        result,
+        ["finalPrice", "saved"],
+        ["finalText", "savedText", "label", "copyText"]
+      )
+    ) {
       setCardOutOfRange(
         "discount",
         formulaDiv,
@@ -2210,7 +2239,7 @@
     resultSpan.textContent = `→ final: ${result.finalText} | saved: ${result.savedText}`;
     setResult("discountResult", result.label);
 
-    lastValidCalc.discount = buildValidHistoryCandidate({
+    lastValidCalc.discount = {
       calculator: "discount",
       calculatorLabel: "Discount",
       inputA: getRawInput("discountPrice"),
@@ -2219,7 +2248,7 @@
       inputsText: `${price} (−${disc}%)`,
       resultText: `Final: ${result.finalText} · Saved: ${result.savedText}`,
       copyText: result.copyText
-    });
+    };
   }
 
   function updateBaseLive() {
@@ -2252,7 +2281,7 @@
       return;
     }
 
-    if (!allFiniteValues(result, ["value"])) {
+    if (!allFiniteValues(result, ["value"], ["label", "liveResult"])) {
       setCardOutOfRange("base", formulaDiv, resultSpan, "baseResult", defaultFormula);
       return;
     }
@@ -2261,7 +2290,7 @@
     resultSpan.textContent = `→ ${result.label}`;
     setResult("baseResult", result.label);
 
-    lastValidCalc.base = buildValidHistoryCandidate({
+    lastValidCalc.base = {
       calculator: "base",
       calculatorLabel: "Find Original Value",
       inputA: getRawInput("baseX"),
@@ -2270,7 +2299,7 @@
       inputsText: `${x} is ${y}%`,
       resultText: result.label,
       copyText: result.label
-    });
+    };
   }
 
   function updateMarkupLive() {
@@ -2317,7 +2346,13 @@
       return;
     }
 
-    if (!allFiniteValues(result, ["profit", "markup", "margin"])) {
+    if (
+      !allFiniteValues(
+        result,
+        ["profit", "markup", "margin"],
+        ["profitText", "markupText", "marginText", "label", "liveResult", "copyText"]
+      )
+    ) {
       setCardOutOfRange(
         "markup",
         formulaDiv,
@@ -2336,7 +2371,7 @@
     resultSpan.textContent = `→ ${result.liveResult}`;
     setResult("markupResult", result.label);
 
-    lastValidCalc.markup = buildValidHistoryCandidate({
+    lastValidCalc.markup = {
       calculator: "markup",
       calculatorLabel: "Markup & Margin",
       inputA: getRawInput("markupCost"),
@@ -2345,7 +2380,7 @@
       inputsText: `Cost ${cost} → Price ${price}`,
       resultText: `Profit: ${result.profitText} · Markup: ${result.markupText} · Margin: ${result.marginText}`,
       copyText: result.copyText
-    });
+    };
   }
 
   function setTaxMode(newMode, triggerUpdate = true) {
@@ -2410,7 +2445,13 @@
       return;
     }
 
-    if (!allFiniteValues(result, ["net", "tax", "total"])) {
+    if (
+      !allFiniteValues(
+        result,
+        ["net", "tax", "total"],
+        ["netText", "taxText", "totalText", "label", "liveResult", "copyText"]
+      )
+    ) {
       setCardOutOfRange("tax", formulaDiv, resultSpan, "taxResult", defaultLines);
       return;
     }
@@ -2429,7 +2470,7 @@
     resultSpan.textContent = `→ ${result.liveResult}`;
     setResult("taxResult", result.label);
 
-    lastValidCalc.tax = buildValidHistoryCandidate({
+    lastValidCalc.tax = {
       calculator: "tax",
       calculatorLabel: mode === "extract" ? "Tax / VAT (Extract)" : "Tax / VAT (Add)",
       inputA: getRawInput("taxAmount"),
@@ -2444,7 +2485,7 @@
           ? `Net: ${result.netText} · Tax: ${result.taxText}`
           : `Total: ${result.totalText} · Tax: ${result.taxText}`,
       copyText: result.copyText
-    });
+    };
   }
 
   // --- History UI ---
@@ -2610,7 +2651,7 @@
   }
 
   function recordHistoryFor(key) {
-    const entry = lastValidCalc[key];
+    const entry = buildValidHistoryCandidate(lastValidCalc[key]);
     if (!entry) return;
     const updated = addHistoryEntry(entry);
     renderHistory(updated);
@@ -2812,7 +2853,7 @@
       } else {
         hideUpdateBanner();
         if (manual) {
-          setUpdateStatus(`Up to date — running v${latestVersion}.`, false);
+          setUpdateStatus(`Up to date — running Mobile & Web v${APP_VERSION}.`, false);
         }
       }
     } catch {

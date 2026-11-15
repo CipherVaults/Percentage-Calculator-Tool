@@ -138,6 +138,8 @@ function attachPasteSanitizers() {
         event.preventDefault();
         el.value = cleaned;
         el.dispatchEvent(new Event("input", { bubbles: true }));
+      } else {
+        event.preventDefault();
       }
     });
   });

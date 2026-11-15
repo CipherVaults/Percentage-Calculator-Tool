@@ -7,3 +7,4 @@ mobile/*.webmanifest text eol=lf
 ui/*.html text eol=lf
 ui/*.css text eol=lf
 ui/*.js text eol=lf
+scripts/*.mjs text eol=lf

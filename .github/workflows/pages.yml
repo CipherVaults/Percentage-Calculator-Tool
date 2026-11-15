@@ -33,9 +33,19 @@ jobs:
         run: |
           node -e '
             const fs = require("fs");
+            const path = require("path");
             const vm = require("vm");
             const crypto = require("crypto");
             const assert = require("assert");
+
+            const lfFiles = [
+              ...fs.readdirSync("mobile").filter(f => /\.(?:html|js|webmanifest)$/.test(f)).map(f => path.join("mobile", f)),
+              ...fs.readdirSync("ui").filter(f => /\.(?:html|css|js)$/.test(f)).map(f => path.join("ui", f))
+            ];
+            assert(lfFiles.length >= 6, "Expected mobile and ui LF-enforced files");
+            for (const f of lfFiles) {
+              assert(!fs.readFileSync(f).includes(13), `CR byte detected in ${f}`);
+            }
 
             const html = fs.readFileSync("mobile/index.html", "utf8");
             const styleMatch = html.match(/<style>([\s\S]*?)<\/style>/);
@@ -48,13 +58,31 @@ jobs:
 
             const styleHash = crypto.createHash("sha256").update(styleMatch[1], "utf8").digest("base64");
             const scriptHash = crypto.createHash("sha256").update(scriptMatch[1], "utf8").digest("base64");
-            assert(csp.includes(`'\''sha256-${styleHash}'\''`), `CSP missing style hash sha256-${styleHash}`);
-            assert(csp.includes(`'\''sha256-${scriptHash}'\''`), `CSP missing script hash sha256-${scriptHash}`);
+            const styleDir = csp.split(";").map(s => s.trim()).find(s => s.startsWith("style-src "));
+            const scriptDir = csp.split(";").map(s => s.trim()).find(s => s.startsWith("script-src "));
+            assert(styleDir && styleDir.includes(`'\''sha256-${styleHash}'\''`), `CSP style-src missing sha256-${styleHash}`);
+            assert(scriptDir && scriptDir.includes(`'\''sha256-${scriptHash}'\''`), `CSP script-src missing sha256-${scriptHash}`);
             assert(!/frame-ancestors/i.test(csp), "CSP <meta> must not include frame-ancestors");
 
             const swCode = fs.readFileSync("mobile/sw.js", "utf8");
             for (const src of [scriptMatch[1], swCode]) {
               assert(!/\.innerHTML\b|\.outerHTML\b|\beval\s*\(|\bnew\s+Function\b/.test(src), "Forbidden DOM/eval sink found in mobile runtime");
+            }
+            assert(!/\.style\s*(?:\.|\[|=)/.test(scriptMatch[1]), "Mobile runtime style mutation detected");
+
+            const manifest = JSON.parse(fs.readFileSync("mobile/manifest.webmanifest", "utf8"));
+            for (const k of ["name", "short_name", "start_url"]) {
+              assert(typeof manifest[k] === "string" && manifest[k].trim().length > 0, `Missing manifest field: ${k}`);
+            }
+            assert(Array.isArray(manifest.icons) && manifest.icons.length > 0, "Missing manifest icons");
+            const mobileRoot = path.resolve("mobile");
+            for (const icon of manifest.icons) {
+              assert(typeof icon.src === "string" && icon.src.length > 0, "Manifest icon missing src");
+              const rel = icon.src.replace(/^\.\//, "");
+              const resolved = path.resolve(mobileRoot, rel);
+              assert(resolved.startsWith(mobileRoot + path.sep), `Manifest icon escapes mobile/: ${icon.src}`);
+              const stat = fs.statSync(resolved);
+              assert(stat.isFile() && stat.size > 0, `Manifest icon missing or empty: ${icon.src}`);
             }
 
             const fnStart = scriptMatch[1].indexOf("function formatDecimal");
@@ -80,7 +108,41 @@ jobs:
                 else { assert.strictEqual(act.ok, "false"); assert.strictEqual(act.error, c.r.error); }
               }
             }
-            console.log(`Pages pre-deploy verified (${cases.length} cases, CSP hashes OK).`);
+
+            const mmOk = ctx.calcMarkupMargin(80, 100);
+            assert.strictEqual(mmOk.ok, "true");
+            assert.strictEqual(mmOk.profitText, "20.00");
+            assert.strictEqual(mmOk.markupText, "25.00%");
+            assert.strictEqual(mmOk.marginText, "20.00%");
+            assert.strictEqual(mmOk.liveResult, "Profit: 20.00 | Markup: 25.00% | Margin: 20.00%");
+            assert.strictEqual(mmOk.copyText, "Profit: 20.00\nMarkup: 25.00%\nMargin: 20.00%");
+            const mmNeg = ctx.calcMarkupMargin(100, 75);
+            assert.strictEqual(mmNeg.profitText, "-25.00");
+            assert.strictEqual(mmNeg.markupText, "-25.00%");
+            assert.strictEqual(mmNeg.marginText, "-33.33%");
+            assert.strictEqual(ctx.calcMarkupMargin(0, 100).error, "Cost cannot be zero");
+            assert.strictEqual(ctx.calcMarkupMargin(100, 0).error, "Selling price cannot be zero");
+
+            const taxAdd = ctx.calcTax(100, 15, "add");
+            assert.strictEqual(taxAdd.ok, "true");
+            assert.strictEqual(taxAdd.netText, "100.00");
+            assert.strictEqual(taxAdd.taxText, "15.00");
+            assert.strictEqual(taxAdd.totalText, "115.00");
+            assert.strictEqual(taxAdd.liveResult, "Total: 115.00 | Tax: 15.00");
+            assert.strictEqual(taxAdd.copyText, "Total: 115.00\nTax: 15.00\nNet: 100.00");
+            const taxExt = ctx.calcTax(115, 15, "extract");
+            assert.strictEqual(taxExt.ok, "true");
+            assert.strictEqual(taxExt.netText, "100.00");
+            assert.strictEqual(taxExt.taxText, "15.00");
+            assert.strictEqual(taxExt.totalText, "115.00");
+            assert.strictEqual(taxExt.liveResult, "Net: 100.00 | Tax: 15.00");
+            assert.strictEqual(taxExt.copyText, "Net: 100.00\nTax: 15.00\nTotal: 115.00");
+            const taxNegExt = ctx.calcTax(-100, 5, "extract");
+            assert.strictEqual(taxNegExt.netText, "-95.24");
+            assert.strictEqual(taxNegExt.taxText, "-4.76");
+            assert.strictEqual(ctx.calcTax(100, -100, "extract").error, "Tax rate cannot be -100%");
+
+            console.log(`Pages pre-deploy verified (${cases.length} golden + markup/margin + tax + manifest + LF + CSP hashes OK).`);
           '
       - name: Setup Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5

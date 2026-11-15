@@ -1,4 +1,4 @@
-const CACHE_NAME = "pct-tool-v2.2.0-mobile-2";
+const CACHE_NAME = "pct-tool-v2.2.1-mobile-1";
 const PRECACHE_URLS = [
   "./",
   "./index.html",
@@ -37,18 +37,22 @@ function offlineResponse() {
   });
 }
 
+function isHtmlContentType(response) {
+  const contentType = response?.headers?.get?.("content-type") || "";
+  return contentType === "" || /^\s*text\/html(?:;|$)/i.test(contentType);
+}
+
 async function handleNavigationFetch(request, url, scopePathname) {
   try {
     const response = await fetch(buildNoCacheRequest(request));
-    if (isCacheableResponse(response)) {
+    const isAppShell =
+      url.pathname === scopePathname ||
+      url.pathname === scopePathname + "index.html";
+    if (isCacheableResponse(response) && isAppShell && isHtmlContentType(response)) {
       const cloneForRequest = response.clone();
       const cloneForIndex = response.clone();
       const scopeUrl = new URL("./", self.location.href).href;
-      const isAppShell =
-        url.pathname === scopePathname ||
-        url.pathname === scopePathname + "index.html";
-      const cloneForRoot =
-        isAppShell && request.url !== scopeUrl ? response.clone() : null;
+      const cloneForRoot = request.url !== scopeUrl ? response.clone() : null;
       try {
         const cache = await caches.open(CACHE_NAME);
         await cache.put(request, cloneForRequest);
@@ -128,16 +132,20 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  const networkFetch = caches.open(CACHE_NAME).then((cache) =>
-    fetch(new Request(request, { cache: "no-cache" }))
-      .then((response) => {
-        if (isCacheableResponse(response)) {
-          return cache.put(request, response.clone()).then(() => response);
+  const networkFetch = fetch(new Request(request, { cache: "no-cache" }))
+    .then(async (response) => {
+      if (isCacheableResponse(response)) {
+        const copy = response.clone();
+        try {
+          const cache = await caches.open(CACHE_NAME);
+          await cache.put(request, copy);
+        } catch {
+          // Keep returning valid 200 responses if Cache Storage rejects writes.
         }
-        return response;
-      })
-      .catch(() => null)
-  );
+      }
+      return response;
+    })
+    .catch(() => null);
 
   event.waitUntil(networkFetch);
 

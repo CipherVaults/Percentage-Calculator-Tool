@@ -104,7 +104,9 @@ pub enum TaxResult {
 
 /// JavaScript-identical `Math.round(x)`:
 /// ties (`.5`) round toward `+∞` (`js_round(-2.5) == -2.0`), whereas Rust's
-/// `f64::round` rounds ties away from zero (`(-2.5_f64).round() == -3.0`).
+/// `f64::round` rounds ties away from zero (`(-2.5_f64).round() == -3.0`),
+/// and `0.49999999999999994` rounds to `0.0` (not `1.0` as `(x + 0.5).floor()`
+/// would produce due to `0.49999999999999994 + 0.5 == 1.0` in IEEE-754).
 #[inline]
 pub fn js_round(x: f64) -> f64 {
     if !x.is_finite() || x == 0.0 {
@@ -114,11 +116,20 @@ pub fn js_round(x: f64) -> f64 {
     if (-0.5..0.0).contains(&x) {
         return -0.0;
     }
+    // In (0, 0.5), Math.round returns +0 without `(x + 0.5)` rounding to 1.0.
+    if (0.0..0.5).contains(&x) {
+        return 0.0;
+    }
     // Above 2^52 every f64 is already an integer, and `x + 0.5` could double-round.
     if x.abs() >= 4_503_599_627_370_496.0 {
         return x;
     }
-    (x + 0.5).floor()
+    let floor_val = x.floor();
+    if (x - floor_val) >= 0.5 {
+        floor_val + 1.0
+    } else {
+        floor_val
+    }
 }
 
 /// Formats a number to two decimal places using the exact same steps as the
@@ -554,6 +565,39 @@ mod tests {
             calculate_tax(100.0, -100.0, TaxMode::Extract),
             TaxResult::Err {
                 error: "Tax rate cannot be -100%"
+            }
+        );
+    }
+
+    #[test]
+    fn js_round_ecmascript_edge_cases() {
+        let pos_zero_bits = 0.0_f64.to_bits();
+        let neg_zero_bits = (-0.0_f64).to_bits();
+        let two_pow_52 = 4_503_599_627_370_496.0_f64;
+
+        assert_eq!(js_round(0.499_999_999_999_999_94).to_bits(), pos_zero_bits);
+        assert_eq!(js_round(-0.499_999_999_999_999_94).to_bits(), neg_zero_bits);
+        assert_eq!(js_round(-0.5).to_bits(), neg_zero_bits);
+        assert_eq!(js_round(-0.500_000_000_000_000_1), -1.0);
+        assert_eq!(js_round(0.0).to_bits(), pos_zero_bits);
+        assert_eq!(js_round(-0.0).to_bits(), neg_zero_bits);
+        assert!(js_round(f64::NAN).is_nan());
+        assert_eq!(js_round(f64::INFINITY), f64::INFINITY);
+        assert_eq!(js_round(f64::NEG_INFINITY), f64::NEG_INFINITY);
+
+        assert_eq!(js_round(two_pow_52), two_pow_52);
+        assert_eq!(js_round(-two_pow_52), -two_pow_52);
+        assert_eq!(js_round(two_pow_52 - 0.5), two_pow_52);
+        assert_eq!(js_round(-(two_pow_52 - 0.5)), -(two_pow_52 - 1.0));
+        assert_eq!(js_round(two_pow_52 + 1.0), two_pow_52 + 1.0);
+        assert_eq!(js_round(-(two_pow_52 + 1.0)), -(two_pow_52 + 1.0));
+
+        assert_eq!(
+            calculate_percentage_portion(50.0, 0.009_999_999_999_999_998),
+            CalcResult::Ok {
+                value: 0.004_999_999_999_999_999,
+                label: "0.00".into(),
+                live_result: "0.00".into(),
             }
         );
     }

@@ -6,8 +6,9 @@
 //! one of the 10,000+ cases.
 
 use percent_core::{
-    calculate_discount, calculate_original_value, calculate_percentage_change,
-    calculate_percentage_of_total, calculate_percentage_portion, format_decimal, CalcResult,
+    calculate_discount, calculate_markup_margin, calculate_original_value,
+    calculate_percentage_change, calculate_percentage_of_total, calculate_percentage_portion,
+    calculate_tax, format_decimal, CalcResult, MarkupMarginResult, TaxMode, TaxResult,
 };
 use serde::Deserialize;
 
@@ -29,6 +30,10 @@ fn parse_js_num(s: &str) -> f64 {
     }
 }
 
+fn same_js_number(actual: f64, expected: f64) -> bool {
+    (actual.is_nan() && expected.is_nan()) || actual == expected
+}
+
 #[test]
 fn matches_v1_1_javascript_math_byte_for_byte() {
     let raw = include_str!("fixtures/golden.json");
@@ -38,6 +43,8 @@ fn matches_v1_1_javascript_math_byte_for_byte() {
         "expected >10k golden cases, got {}",
         cases.len()
     );
+
+    let mut nan_change_live_checked = 0usize;
 
     for (idx, case) in cases.iter().enumerate() {
         match case.f.as_str() {
@@ -51,19 +58,56 @@ fn matches_v1_1_javascript_math_byte_for_byte() {
                 let price = parse_js_num(&case.a[0]);
                 let disc = parse_js_num(&case.a[1]);
                 let actual = calculate_discount(price, disc);
+                let want_ok = case.r["ok"].as_bool().unwrap();
+                let want_final_price = parse_js_num(case.r["finalPrice"].as_str().unwrap());
+                let want_saved = parse_js_num(case.r["saved"].as_str().unwrap());
+                let want_label = case.r["label"].as_str().unwrap();
+                let want_copy_text = case.r["copyText"].as_str().unwrap();
+                let (want_final_text, want_saved_text) = want_label
+                    .strip_prefix("Final: ")
+                    .and_then(|rest| rest.split_once("<br>Saved: "))
+                    .unwrap_or_else(|| {
+                        panic!("case #{idx} unexpected discount label {want_label}")
+                    });
+
                 assert_eq!(
-                    actual.label,
-                    case.r["label"].as_str().unwrap(),
-                    "case #{idx} discount({}, {}) label",
+                    actual.ok, want_ok,
+                    "case #{idx} discount({}, {}) ok",
+                    case.a[0], case.a[1]
+                );
+                assert!(
+                    same_js_number(actual.final_price, want_final_price),
+                    "case #{idx} discount({}, {}) final_price: got {}, want {want_final_price}",
                     case.a[0],
-                    case.a[1]
+                    case.a[1],
+                    actual.final_price
+                );
+                assert!(
+                    same_js_number(actual.saved, want_saved),
+                    "case #{idx} discount({}, {}) saved: got {}, want {want_saved}",
+                    case.a[0],
+                    case.a[1],
+                    actual.saved
                 );
                 assert_eq!(
-                    actual.copy_text,
-                    case.r["copyText"].as_str().unwrap(),
+                    actual.final_text, want_final_text,
+                    "case #{idx} discount({}, {}) final_text",
+                    case.a[0], case.a[1]
+                );
+                assert_eq!(
+                    actual.saved_text, want_saved_text,
+                    "case #{idx} discount({}, {}) saved_text",
+                    case.a[0], case.a[1]
+                );
+                assert_eq!(
+                    actual.label, want_label,
+                    "case #{idx} discount({}, {}) label",
+                    case.a[0], case.a[1]
+                );
+                assert_eq!(
+                    actual.copy_text, want_copy_text,
                     "case #{idx} discount({}, {}) copyText",
-                    case.a[0],
-                    case.a[1]
+                    case.a[0], case.a[1]
                 );
             }
             other => {
@@ -78,11 +122,39 @@ fn matches_v1_1_javascript_math_byte_for_byte() {
                 };
                 let want_ok = case.r["ok"].as_bool().unwrap();
                 match (actual, want_ok) {
-                    (CalcResult::Ok { label, .. }, true) => {
+                    (
+                        CalcResult::Ok {
+                            value,
+                            label,
+                            live_result,
+                        },
+                        true,
+                    ) => {
+                        let want_value = parse_js_num(case.r["value"].as_str().unwrap());
                         let want_label = case.r["label"].as_str().unwrap();
+                        assert!(
+                            same_js_number(value, want_value),
+                            "case #{idx} {other}({}, {}) value: got {value}, want {want_value}",
+                            case.a[0],
+                            case.a[1]
+                        );
                         assert_eq!(
                             label, want_label,
-                            "case #{idx} {other}({}, {})",
+                            "case #{idx} {other}({}, {}) label",
+                            case.a[0], case.a[1]
+                        );
+                        // For `percentageChange` yielding NaN (e.g. Infinity -> finite),
+                        // `label` falls back to "0.00% no change" while `live_result`
+                        // preserves "?% no change" matching JS `calcChange`.
+                        let want_live_result = if other == "percentageChange" && value.is_nan() {
+                            nan_change_live_checked += 1;
+                            "?% no change"
+                        } else {
+                            want_label
+                        };
+                        assert_eq!(
+                            live_result, want_live_result,
+                            "case #{idx} {other}({}, {}) live_result",
                             case.a[0], case.a[1]
                         );
                     }
@@ -99,6 +171,625 @@ fn matches_v1_1_javascript_math_byte_for_byte() {
                         case.a[0], case.a[1], case.r
                     ),
                 }
+            }
+        }
+    }
+
+    assert!(
+        nan_change_live_checked > 0,
+        "expected golden.json to exercise NaN percentageChange live_result behavior"
+    );
+}
+
+#[test]
+fn markup_margin_parity_vectors_and_stability() {
+    #[allow(clippy::type_complexity)]
+    let ok_cases: &[(f64, f64, f64, f64, f64, &str, &str, &str)] = &[
+        (80.0, 100.0, 20.0, 25.0, 20.0, "20.00", "25.00%", "20.00%"),
+        (100.0, 100.0, 0.0, 0.0, 0.0, "0.00", "0.00%", "0.00%"),
+        (
+            100.0, 80.0, -20.0, -20.0, -25.0, "-20.00", "-20.00%", "-25.00%",
+        ),
+        (
+            -80.0, -100.0, -20.0, 25.0, 20.0, "-20.00", "25.00%", "20.00%",
+        ),
+        (
+            -80.0, 100.0, 180.0, -225.0, 180.0, "180.00", "-225.00%", "180.00%",
+        ),
+        (
+            12.345, 24.69, 12.345, 100.0, 50.0, "12.35", "100.00%", "50.00%",
+        ),
+        (
+            100.0,
+            100.025,
+            100.025 - 100.0,
+            ((100.025 - 100.0) / 100.0) * 100.0,
+            ((100.025 - 100.0) / 100.025) * 100.0,
+            "0.03",
+            "0.03%",
+            "0.02%",
+        ),
+        (
+            100.0,
+            99.975,
+            99.975 - 100.0,
+            ((99.975 - 100.0) / 100.0) * 100.0,
+            ((99.975 - 100.0) / 99.975) * 100.0,
+            "-0.03",
+            "-0.03%",
+            "-0.03%",
+        ),
+        (
+            1e20,
+            2e20,
+            1e20,
+            100.0,
+            50.0,
+            "100000000000000000000.00",
+            "100.00%",
+            "50.00%",
+        ),
+        (
+            1e21,
+            2e21,
+            1e21,
+            100.0,
+            50.0,
+            "999999999999999868928.00",
+            "100.00%",
+            "50.00%",
+        ),
+        (
+            f64::NAN,
+            100.0,
+            f64::NAN,
+            f64::NAN,
+            f64::NAN,
+            "?",
+            "?%",
+            "?%",
+        ),
+        (
+            100.0,
+            f64::NAN,
+            f64::NAN,
+            f64::NAN,
+            f64::NAN,
+            "?",
+            "?%",
+            "?%",
+        ),
+        (
+            f64::INFINITY,
+            100.0,
+            f64::NEG_INFINITY,
+            f64::NAN,
+            f64::NEG_INFINITY,
+            "-Infinity",
+            "?%",
+            "-Infinity%",
+        ),
+        (
+            100.0,
+            f64::INFINITY,
+            f64::INFINITY,
+            f64::INFINITY,
+            f64::NAN,
+            "Infinity",
+            "Infinity%",
+            "?%",
+        ),
+        (
+            f64::NEG_INFINITY,
+            100.0,
+            f64::INFINITY,
+            f64::NAN,
+            f64::INFINITY,
+            "Infinity",
+            "?%",
+            "Infinity%",
+        ),
+        (
+            1e308,
+            100.0,
+            100.0 - 1e308,
+            -100.0,
+            (100.0 - 1e308) / 100.0 * 100.0,
+            "-Infinity",
+            "-100.00%",
+            "-Infinity%",
+        ),
+    ];
+
+    for &(cost, price, want_profit, want_markup, want_margin, p_txt, k_txt, m_txt) in ok_cases {
+        let first = calculate_markup_margin(cost, price);
+        let second = calculate_markup_margin(cost, price);
+        match first {
+            MarkupMarginResult::Ok {
+                profit,
+                markup,
+                margin,
+                ref profit_text,
+                ref markup_text,
+                ref margin_text,
+                ref label,
+                ref live_result,
+                ref copy_text,
+            } => {
+                assert!(same_js_number(profit, want_profit));
+                assert!(same_js_number(markup, want_markup));
+                assert!(same_js_number(margin, want_margin));
+                assert_eq!(profit_text, p_txt);
+                assert_eq!(markup_text, k_txt);
+                assert_eq!(margin_text, m_txt);
+                assert_eq!(
+                    label,
+                    &format!("Profit: {p_txt}<br>Markup: {k_txt} · Margin: {m_txt}")
+                );
+                assert_eq!(
+                    live_result,
+                    &format!("Profit: {p_txt} | Markup: {k_txt} | Margin: {m_txt}")
+                );
+                assert_eq!(
+                    copy_text,
+                    &format!("Profit: {p_txt}\nMarkup: {k_txt}\nMargin: {m_txt}")
+                );
+                assert_eq!(format!("{first:?}"), format!("{second:?}"));
+            }
+            MarkupMarginResult::Err { error } => {
+                panic!("expected Ok for ({cost}, {price}), got Err({error})")
+            }
+        }
+    }
+
+    for (cost, price, want_err) in [
+        (0.0, 100.0, "Cost cannot be zero"),
+        (-0.0, 100.0, "Cost cannot be zero"),
+        (80.0, 0.0, "Selling price cannot be zero"),
+        (80.0, -0.0, "Selling price cannot be zero"),
+        (0.0, 0.0, "Cost cannot be zero"),
+    ] {
+        assert_eq!(
+            calculate_markup_margin(cost, price),
+            MarkupMarginResult::Err { error: want_err }
+        );
+    }
+}
+
+#[test]
+fn tax_add_and_extract_parity_vectors_and_stability() {
+    #[allow(clippy::type_complexity)]
+    let ok_cases: &[(f64, f64, TaxMode, f64, f64, f64, &str, &str, &str)] = &[
+        (
+            100.0,
+            15.0,
+            TaxMode::Add,
+            100.0,
+            15.0,
+            115.0,
+            "100.00",
+            "15.00",
+            "115.00",
+        ),
+        (
+            115.0,
+            15.0,
+            TaxMode::Extract,
+            100.0,
+            15.0,
+            115.0,
+            "100.00",
+            "15.00",
+            "115.00",
+        ),
+        (
+            199.99,
+            7.5,
+            TaxMode::Add,
+            199.99,
+            199.99 * 0.075,
+            199.99 + 199.99 * 0.075,
+            "199.99",
+            "15.00",
+            "214.99",
+        ),
+        (
+            214.99,
+            7.5,
+            TaxMode::Extract,
+            (214.99 * 100.0) / 107.5,
+            214.99 - (214.99 * 100.0) / 107.5,
+            214.99,
+            "199.99",
+            "15.00",
+            "214.99",
+        ),
+        (
+            100.0,
+            0.0,
+            TaxMode::Add,
+            100.0,
+            0.0,
+            100.0,
+            "100.00",
+            "0.00",
+            "100.00",
+        ),
+        (
+            100.0,
+            0.0,
+            TaxMode::Extract,
+            100.0,
+            0.0,
+            100.0,
+            "100.00",
+            "0.00",
+            "100.00",
+        ),
+        (
+            0.0,
+            15.0,
+            TaxMode::Add,
+            0.0,
+            0.0,
+            0.0,
+            "0.00",
+            "0.00",
+            "0.00",
+        ),
+        (
+            -0.0,
+            15.0,
+            TaxMode::Extract,
+            0.0,
+            0.0,
+            0.0,
+            "0.00",
+            "0.00",
+            "0.00",
+        ),
+        (
+            -100.0,
+            20.0,
+            TaxMode::Add,
+            -100.0,
+            -20.0,
+            -120.0,
+            "-100.00",
+            "-20.00",
+            "-120.00",
+        ),
+        (
+            -120.0,
+            20.0,
+            TaxMode::Extract,
+            -100.0,
+            -20.0,
+            -120.0,
+            "-100.00",
+            "-20.00",
+            "-120.00",
+        ),
+        (
+            100.0,
+            -100.0,
+            TaxMode::Add,
+            100.0,
+            -100.0,
+            0.0,
+            "100.00",
+            "-100.00",
+            "0.00",
+        ),
+        (
+            100.0,
+            -99.99,
+            TaxMode::Extract,
+            (100.0 * 100.0) / (100.0 - 99.99),
+            100.0 - (100.0 * 100.0) / (100.0 - 99.99),
+            100.0,
+            "1000000.00",
+            "-999900.00",
+            "100.00",
+        ),
+        (
+            100.0,
+            0.025,
+            TaxMode::Add,
+            100.0,
+            0.025,
+            100.025,
+            "100.00",
+            "0.03",
+            "100.03",
+        ),
+        (
+            100.0,
+            -0.025,
+            TaxMode::Add,
+            100.0,
+            -0.025,
+            99.975,
+            "100.00",
+            "-0.02",
+            "99.98",
+        ),
+        (
+            1e20,
+            10.0,
+            TaxMode::Add,
+            1e20,
+            1e19,
+            1.1e20,
+            "100000000000000000000.00",
+            "10000000000000000000.00",
+            "110000000000000000000.00",
+        ),
+        (
+            1e21,
+            10.0,
+            TaxMode::Extract,
+            (1e21 * 100.0) / 110.0,
+            1e21 - (1e21 * 100.0) / 110.0,
+            1e21,
+            "909090909090908995584.00",
+            "90909090909091004416.00",
+            "999999999999999868928.00",
+        ),
+        (
+            f64::NAN,
+            15.0,
+            TaxMode::Add,
+            f64::NAN,
+            f64::NAN,
+            f64::NAN,
+            "?",
+            "?",
+            "?",
+        ),
+        (
+            100.0,
+            f64::NAN,
+            TaxMode::Extract,
+            f64::NAN,
+            f64::NAN,
+            100.0,
+            "?",
+            "?",
+            "100.00",
+        ),
+        (
+            f64::INFINITY,
+            15.0,
+            TaxMode::Add,
+            f64::INFINITY,
+            f64::INFINITY,
+            f64::INFINITY,
+            "Infinity",
+            "Infinity",
+            "Infinity",
+        ),
+        (
+            100.0,
+            f64::INFINITY,
+            TaxMode::Extract,
+            0.0,
+            100.0,
+            100.0,
+            "0.00",
+            "100.00",
+            "100.00",
+        ),
+        (
+            100.0,
+            f64::NEG_INFINITY,
+            TaxMode::Extract,
+            0.0,
+            100.0,
+            100.0,
+            "0.00",
+            "100.00",
+            "100.00",
+        ),
+    ];
+
+    for &(amount, rate, mode, want_net, want_tax, want_total, n_txt, x_txt, t_txt) in ok_cases {
+        let first = calculate_tax(amount, rate, mode);
+        let second = calculate_tax(amount, rate, mode);
+        match first {
+            TaxResult::Ok {
+                net,
+                tax,
+                total,
+                ref net_text,
+                ref tax_text,
+                ref total_text,
+                ref label,
+                ref live_result,
+                ref copy_text,
+            } => {
+                assert!(same_js_number(net, want_net));
+                assert!(same_js_number(tax, want_tax));
+                assert!(same_js_number(total, want_total));
+                assert_eq!(net_text, n_txt);
+                assert_eq!(tax_text, x_txt);
+                assert_eq!(total_text, t_txt);
+                match mode {
+                    TaxMode::Add => {
+                        assert_eq!(
+                            label,
+                            &format!("Total: {t_txt}<br>Tax: {x_txt} (Net: {n_txt})")
+                        );
+                        assert_eq!(live_result, &format!("Total: {t_txt} | Tax: {x_txt}"));
+                        assert_eq!(
+                            copy_text,
+                            &format!("Total: {t_txt}\nTax: {x_txt}\nNet: {n_txt}")
+                        );
+                    }
+                    TaxMode::Extract => {
+                        assert_eq!(
+                            label,
+                            &format!("Net: {n_txt}<br>Tax: {x_txt} (Total: {t_txt})")
+                        );
+                        assert_eq!(live_result, &format!("Net: {n_txt} | Tax: {x_txt}"));
+                        assert_eq!(
+                            copy_text,
+                            &format!("Net: {n_txt}\nTax: {x_txt}\nTotal: {t_txt}")
+                        );
+                    }
+                }
+                assert_eq!(format!("{first:?}"), format!("{second:?}"));
+            }
+            TaxResult::Err { error } => {
+                panic!("expected Ok for ({amount}, {rate}, {mode:?}), got Err({error})")
+            }
+        }
+    }
+
+    assert_eq!(
+        calculate_tax(100.0, -100.0, TaxMode::Extract),
+        TaxResult::Err {
+            error: "Tax rate cannot be -100%"
+        }
+    );
+}
+
+#[test]
+fn markup_margin_and_tax_algebraic_invariants() {
+    let costs = [-250.5, -40.0, -1.25, 0.5, 12.34, 80.0, 199.99, 12_500.75];
+    let prices = [-300.25, -40.0, -0.75, 1.0, 15.89, 100.0, 249.95, 18_751.12];
+    for &cost in &costs {
+        for &price in &prices {
+            let first = calculate_markup_margin(cost, price);
+            let second = calculate_markup_margin(cost, price);
+            assert_eq!(first, second, "markup deterministic replay failed");
+            match first {
+                MarkupMarginResult::Ok {
+                    profit,
+                    markup,
+                    margin,
+                    profit_text,
+                    markup_text,
+                    margin_text,
+                    label,
+                    live_result,
+                    copy_text,
+                } => {
+                    let scale = cost.abs() + price.abs() + 1.0;
+                    assert!(
+                        ((cost + profit) - price).abs() <= 4.0 * f64::EPSILON * scale,
+                        "cost + profit != price for ({cost}, {price})"
+                    );
+                    assert_eq!(markup.to_bits(), ((profit / cost) * 100.0).to_bits());
+                    assert_eq!(margin.to_bits(), ((profit / price) * 100.0).to_bits());
+                    assert_eq!(profit_text, format_decimal(profit));
+                    assert_eq!(markup_text, format!("{}%", format_decimal(markup)));
+                    assert_eq!(margin_text, format!("{}%", format_decimal(margin)));
+                    assert_eq!(
+                        label,
+                        format!("Profit: {profit_text}<br>Markup: {markup_text} · Margin: {margin_text}")
+                    );
+                    assert_eq!(
+                        live_result,
+                        format!(
+                            "Profit: {profit_text} | Markup: {markup_text} | Margin: {margin_text}"
+                        )
+                    );
+                    assert_eq!(
+                        copy_text,
+                        format!(
+                            "Profit: {profit_text}\nMarkup: {markup_text}\nMargin: {margin_text}"
+                        )
+                    );
+                }
+                MarkupMarginResult::Err { error } => {
+                    panic!("unexpected error for non-zero ({cost}, {price}): {error}");
+                }
+            }
+        }
+    }
+
+    let amounts = [-500.25, -10.5, 0.0, 1.5, 99.99, 250.0, 10_432.18];
+    let rates = [-50.0, -5.5, 0.0, 5.0, 7.5, 15.0, 21.0, 27.5];
+    for &amount in &amounts {
+        for &rate in &rates {
+            let add_first = calculate_tax(amount, rate, TaxMode::Add);
+            let add_second = calculate_tax(amount, rate, TaxMode::Add);
+            assert_eq!(add_first, add_second);
+            let total_added = match add_first {
+                TaxResult::Ok {
+                    net,
+                    tax,
+                    total,
+                    net_text,
+                    tax_text,
+                    total_text,
+                    label,
+                    live_result,
+                    copy_text,
+                } => {
+                    assert_eq!(net, amount);
+                    assert_eq!(net + tax, total);
+                    assert_eq!(tax, amount * (rate / 100.0));
+                    assert_eq!(net_text, format_decimal(net));
+                    assert_eq!(tax_text, format_decimal(tax));
+                    assert_eq!(total_text, format_decimal(total));
+                    assert_eq!(
+                        label,
+                        format!("Total: {total_text}<br>Tax: {tax_text} (Net: {net_text})")
+                    );
+                    assert_eq!(
+                        live_result,
+                        format!("Total: {total_text} | Tax: {tax_text}")
+                    );
+                    assert_eq!(
+                        copy_text,
+                        format!("Total: {total_text}\nTax: {tax_text}\nNet: {net_text}")
+                    );
+                    total
+                }
+                TaxResult::Err { error } => panic!("unexpected Add error: {error}"),
+            };
+
+            let ext_first = calculate_tax(total_added, rate, TaxMode::Extract);
+            let ext_second = calculate_tax(total_added, rate, TaxMode::Extract);
+            assert_eq!(ext_first, ext_second);
+            match ext_first {
+                TaxResult::Ok {
+                    net,
+                    tax,
+                    total,
+                    net_text,
+                    tax_text,
+                    total_text,
+                    label,
+                    live_result,
+                    copy_text,
+                } => {
+                    assert_eq!(total, total_added);
+                    let tol = 8.0 * f64::EPSILON * (net.abs() + tax.abs() + total.abs() + 1.0);
+                    assert!(
+                        ((net + tax) - total).abs() <= tol,
+                        "Extract net + tax != total for ({total_added}, {rate})"
+                    );
+                    assert!(
+                        (net - amount).abs() <= tol,
+                        "Add -> Extract round-trip failed for ({amount}, {rate}): got {net}"
+                    );
+                    assert_eq!(net_text, format_decimal(net));
+                    assert_eq!(tax_text, format_decimal(tax));
+                    assert_eq!(total_text, format_decimal(total));
+                    assert_eq!(
+                        label,
+                        format!("Net: {net_text}<br>Tax: {tax_text} (Total: {total_text})")
+                    );
+                    assert_eq!(live_result, format!("Net: {net_text} | Tax: {tax_text}"));
+                    assert_eq!(
+                        copy_text,
+                        format!("Net: {net_text}\nTax: {tax_text}\nTotal: {total_text}")
+                    );
+                }
+                TaxResult::Err { error } => panic!("unexpected Extract error: {error}"),
             }
         }
     }

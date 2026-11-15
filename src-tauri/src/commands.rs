@@ -243,11 +243,8 @@ fn write_atomic_private(path: &Path, data: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-pub fn load_history_from_disk(app: &AppHandle) -> Vec<HistoryEntry> {
-    let Ok(path) = history_file_path(app) else {
-        return Vec::new();
-    };
-    let Ok(bytes) = read_regular_file_limited(&path, HISTORY_MAX_FILE_BYTES) else {
+pub fn load_history_from_path(path: &Path) -> Vec<HistoryEntry> {
+    let Ok(bytes) = read_regular_file_limited(path, HISTORY_MAX_FILE_BYTES) else {
         return Vec::new();
     };
     let Ok(entries) = serde_json::from_slice::<Vec<HistoryEntry>>(&bytes) else {
@@ -260,33 +257,46 @@ pub fn load_history_from_disk(app: &AppHandle) -> Vec<HistoryEntry> {
         .collect()
 }
 
-fn persist_history_to_disk(app: &AppHandle, entries: &[HistoryEntry]) -> Result<(), String> {
-    let path = history_file_path(app)?;
+pub fn load_history_from_disk(app: &AppHandle) -> Vec<HistoryEntry> {
+    let Ok(path) = history_file_path(app) else {
+        return Vec::new();
+    };
+    load_history_from_path(&path)
+}
+
+fn persist_history_to_path(path: &Path, entries: &[HistoryEntry]) -> Result<(), String> {
     let data = serde_json::to_vec_pretty(entries)
         .map_err(|err| format!("failed to serialize history: {err}"))?;
-    write_atomic_private(&path, &data)
+    write_atomic_private(path, &data)
+}
+
+pub fn load_settings_from_path(path: &Path) -> AppSettings {
+    let Ok(bytes) = read_regular_file_limited(path, SETTINGS_MAX_FILE_BYTES) else {
+        return AppSettings::default();
+    };
+    serde_json::from_slice::<AppSettings>(&bytes).unwrap_or_default()
 }
 
 pub fn load_settings_from_disk(app: &AppHandle) -> AppSettings {
     let Ok(path) = settings_file_path(app) else {
         return AppSettings::default();
     };
-    let Ok(bytes) = read_regular_file_limited(&path, SETTINGS_MAX_FILE_BYTES) else {
-        return AppSettings::default();
-    };
-    serde_json::from_slice::<AppSettings>(&bytes).unwrap_or_default()
+    load_settings_from_path(&path)
 }
 
-fn persist_settings_to_disk(app: &AppHandle, settings: &AppSettings) -> Result<(), String> {
-    let path = settings_file_path(app)?;
+fn persist_settings_to_path(path: &Path, settings: &AppSettings) -> Result<(), String> {
     let data = serde_json::to_vec_pretty(settings)
         .map_err(|err| format!("failed to serialize settings: {err}"))?;
-    write_atomic_private(&path, &data)
+    write_atomic_private(path, &data)
 }
 
 #[derive(Deserialize)]
 struct GitHubReleaseResponse {
     tag_name: String,
+    #[serde(default)]
+    draft: bool,
+    #[serde(default)]
+    prerelease: bool,
     #[serde(default)]
     html_url: Option<String>,
     #[serde(default)]
@@ -294,12 +304,22 @@ struct GitHubReleaseResponse {
 }
 
 pub fn parse_semver_triplet(version_or_tag: &str) -> Option<(u64, u64, u64)> {
-    let trimmed = version_or_tag.trim().trim_start_matches(['v', 'V']);
-    let core = trimmed.split(['-', '+']).next()?.trim();
+    let trimmed = version_or_tag.trim();
+    let without_v = trimmed
+        .strip_prefix('v')
+        .or_else(|| trimmed.strip_prefix('V'))
+        .unwrap_or(trimmed);
+    let core = without_v.split(['-', '+']).next()?;
     let mut parts = core.split('.');
-    let major = parts.next()?.parse::<u64>().ok()?;
-    let minor = parts.next()?.parse::<u64>().ok()?;
-    let patch = parts.next()?.parse::<u64>().ok()?;
+    let parse_part = |s: &str| -> Option<u64> {
+        if s.is_empty() || !s.bytes().all(|b| b.is_ascii_digit()) {
+            return None;
+        }
+        s.parse::<u64>().ok()
+    };
+    let major = parse_part(parts.next()?)?;
+    let minor = parse_part(parts.next()?)?;
+    let patch = parse_part(parts.next()?)?;
     if parts.next().is_some() {
         return None;
     }
@@ -322,12 +342,29 @@ pub fn parse_github_release_json(
 ) -> Result<UpdateCheckResult, String> {
     let parsed: GitHubReleaseResponse =
         serde_json::from_slice(bytes).map_err(|err| format!("invalid release JSON: {err}"))?;
+    if parsed.draft || parsed.prerelease {
+        return Ok(UpdateCheckResult {
+            ok: true,
+            update_available: false,
+            current_version: current_version.to_string(),
+            latest_version: None,
+            release_url: GITHUB_RELEASES_URL.to_string(),
+            published_at: None,
+            error: None,
+        });
+    }
     let (maj, min, patch) = parse_semver_triplet(&parsed.tag_name)
         .ok_or_else(|| "invalid release tag format".to_string())?;
     let latest_version = format!("{maj}.{min}.{patch}");
     let release_url = parsed
         .html_url
-        .filter(|u| u.starts_with(GITHUB_RELEASES_PREFIX) && u.len() <= MAX_FIELD_LEN)
+        .filter(|u| {
+            u.starts_with(GITHUB_RELEASES_PREFIX)
+                && u.len() <= MAX_FIELD_LEN
+                && !u.contains("..")
+                && !u.contains('\\')
+                && !u.chars().any(|c| c.is_whitespace() || c.is_control())
+        })
         .unwrap_or_else(|| GITHUB_RELEASES_URL.to_string());
     let published_at = parsed
         .published_at
@@ -377,6 +414,9 @@ fn validate_entry_fields(
         .any(|f| f.trim().is_empty() || f.len() > MAX_FIELD_LEN)
     {
         return Err("history field empty or exceeds max length");
+    }
+    if input_a.chars().any(char::is_control) || input_b.chars().any(char::is_control) {
+        return Err("history input contains control characters");
     }
     if let Some(mode) = mode {
         if mode != "add" && mode != "extract" {
@@ -454,8 +494,7 @@ pub fn calc_tax(amount: f64, rate_percent: f64, mode: TaxMode) -> TaxResult {
     calculate_tax(amount, rate_percent, mode)
 }
 
-#[tauri::command]
-pub fn history_list(state: State<'_, HistoryState>) -> Result<Vec<HistoryEntry>, String> {
+fn history_list_state(state: &HistoryState) -> Result<Vec<HistoryEntry>, String> {
     let entries = state
         .entries
         .lock()
@@ -464,11 +503,18 @@ pub fn history_list(state: State<'_, HistoryState>) -> Result<Vec<HistoryEntry>,
 }
 
 #[tauri::command]
-pub fn history_add(
-    app: AppHandle,
-    state: State<'_, HistoryState>,
+pub fn history_list(state: State<'_, HistoryState>) -> Result<Vec<HistoryEntry>, String> {
+    history_list_state(&state)
+}
+
+fn history_add_with_path<F>(
+    state: &HistoryState,
     entry: NewHistoryEntry,
-) -> Result<Vec<HistoryEntry>, String> {
+    resolve_path: F,
+) -> Result<Vec<HistoryEntry>, String>
+where
+    F: FnOnce() -> Result<PathBuf, String>,
+{
     validate_new_entry(&entry).map_err(|e| e.to_string())?;
 
     let mut entries = state
@@ -489,7 +535,8 @@ pub fn history_add(
             let mut next_entries = entries.clone();
             next_entries[0].timestamp_ms = timestamp_ms;
             if !state.in_memory_only {
-                persist_history_to_disk(&app, &next_entries)?;
+                let path = resolve_path()?;
+                persist_history_to_path(&path, &next_entries)?;
             }
             *entries = next_entries.clone();
             return Ok(next_entries);
@@ -522,7 +569,8 @@ pub fn history_add(
     next_entries.truncate(HISTORY_MAX_ENTRIES);
 
     if !state.in_memory_only {
-        persist_history_to_disk(&app, &next_entries)?;
+        let path = resolve_path()?;
+        persist_history_to_path(&path, &next_entries)?;
     }
 
     *next_id = bumped_id;
@@ -532,11 +580,22 @@ pub fn history_add(
 }
 
 #[tauri::command]
-pub fn history_delete(
+pub fn history_add(
     app: AppHandle,
     state: State<'_, HistoryState>,
-    id: u64,
+    entry: NewHistoryEntry,
 ) -> Result<Vec<HistoryEntry>, String> {
+    history_add_with_path(&state, entry, || history_file_path(&app))
+}
+
+fn history_delete_with_path<F>(
+    state: &HistoryState,
+    id: u64,
+    resolve_path: F,
+) -> Result<Vec<HistoryEntry>, String>
+where
+    F: FnOnce() -> Result<PathBuf, String>,
+{
     let mut entries = state
         .entries
         .lock()
@@ -550,7 +609,8 @@ pub fn history_delete(
     }
 
     if !state.in_memory_only {
-        persist_history_to_disk(&app, &next_entries)?;
+        let path = resolve_path()?;
+        persist_history_to_path(&path, &next_entries)?;
     }
     *entries = next_entries.clone();
 
@@ -558,17 +618,29 @@ pub fn history_delete(
 }
 
 #[tauri::command]
-pub fn history_clear(
+pub fn history_delete(
     app: AppHandle,
     state: State<'_, HistoryState>,
+    id: u64,
 ) -> Result<Vec<HistoryEntry>, String> {
+    history_delete_with_path(&state, id, || history_file_path(&app))
+}
+
+fn history_clear_with_path<F>(
+    state: &HistoryState,
+    resolve_path: F,
+) -> Result<Vec<HistoryEntry>, String>
+where
+    F: FnOnce() -> Result<PathBuf, String>,
+{
     let mut entries = state
         .entries
         .lock()
         .map_err(|_| "history lock poisoned".to_string())?;
 
     if !state.in_memory_only {
-        persist_history_to_disk(&app, &[])?;
+        let path = resolve_path()?;
+        persist_history_to_path(&path, &[])?;
     }
     entries.clear();
 
@@ -576,7 +648,14 @@ pub fn history_clear(
 }
 
 #[tauri::command]
-pub fn get_settings(state: State<'_, SettingsState>) -> Result<AppSettings, String> {
+pub fn history_clear(
+    app: AppHandle,
+    state: State<'_, HistoryState>,
+) -> Result<Vec<HistoryEntry>, String> {
+    history_clear_with_path(&state, || history_file_path(&app))
+}
+
+fn get_settings_state(state: &SettingsState) -> Result<AppSettings, String> {
     let settings = state
         .settings
         .lock()
@@ -585,22 +664,39 @@ pub fn get_settings(state: State<'_, SettingsState>) -> Result<AppSettings, Stri
 }
 
 #[tauri::command]
-pub fn set_settings(
-    app: AppHandle,
-    state: State<'_, SettingsState>,
+pub fn get_settings(state: State<'_, SettingsState>) -> Result<AppSettings, String> {
+    get_settings_state(&state)
+}
+
+fn set_settings_with_path<F>(
+    state: &SettingsState,
     settings: AppSettings,
-) -> Result<AppSettings, String> {
+    resolve_path: F,
+) -> Result<AppSettings, String>
+where
+    F: FnOnce() -> Result<PathBuf, String>,
+{
     let mut guard = state
         .settings
         .lock()
         .map_err(|_| "settings lock poisoned".to_string())?;
 
     if !state.in_memory_only {
-        persist_settings_to_disk(&app, &settings)?;
+        let path = resolve_path()?;
+        persist_settings_to_path(&path, &settings)?;
     }
     *guard = settings.clone();
 
     Ok(settings)
+}
+
+#[tauri::command]
+pub fn set_settings(
+    app: AppHandle,
+    state: State<'_, SettingsState>,
+    settings: AppSettings,
+) -> Result<AppSettings, String> {
+    set_settings_with_path(&state, settings, || settings_file_path(&app))
 }
 
 #[tauri::command]
@@ -735,11 +831,16 @@ pub fn open_release_page(smoke: State<'_, SmokeState>) -> Result<(), String> {
     Ok(())
 }
 
-#[tauri::command]
-pub fn copy_text(app: AppHandle, text: String) -> Result<(), String> {
+pub fn validate_copy_text(text: &str) -> Result<(), String> {
     if text.len() > MAX_COPY_LEN {
         return Err("clipboard text exceeds max length".to_string());
     }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn copy_text(app: AppHandle, text: String) -> Result<(), String> {
+    validate_copy_text(&text)?;
     app.clipboard()
         .write_text(text)
         .map_err(|err| err.to_string())
@@ -1044,11 +1145,101 @@ mod tests {
         assert!(validate_history_entry(&stored).is_err());
     }
 
+    static TEST_DIR_SEQ: AtomicU64 = AtomicU64::new(0);
+
+    struct TestTempDir {
+        path: PathBuf,
+    }
+
+    impl TestTempDir {
+        fn new(prefix: &str) -> Self {
+            let base = std::env::temp_dir();
+            std::fs::create_dir_all(&base).unwrap();
+            let tid: String = format!("{:?}", std::thread::current().id())
+                .chars()
+                .filter(|c| c.is_ascii_alphanumeric())
+                .collect();
+            for _ in 0..32 {
+                let seq = TEST_DIR_SEQ.fetch_add(1, Ordering::Relaxed);
+                let dir = base.join(format!("{prefix}-{}-{tid}-{seq}", std::process::id()));
+                match std::fs::create_dir(&dir) {
+                    Ok(()) => return Self { path: dir },
+                    Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                    Err(err) => panic!("failed to create test temp dir {}: {err}", dir.display()),
+                }
+            }
+            panic!("exhausted attempts to allocate unique test temp dir");
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    #[allow(clippy::permissions_set_readonly_false)]
+    fn clear_readonly_recursive(path: &Path) {
+        if let Ok(meta) = std::fs::symlink_metadata(path) {
+            if !meta.file_type().is_symlink() {
+                #[cfg(unix)]
+                if meta.is_dir() {
+                    use std::os::unix::fs::PermissionsExt;
+                    let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700));
+                }
+                let mut perms = meta.permissions();
+                if perms.readonly() {
+                    perms.set_readonly(false);
+                    let _ = std::fs::set_permissions(path, perms);
+                }
+                if meta.is_dir() {
+                    if let Ok(entries) = std::fs::read_dir(path) {
+                        for entry in entries.flatten() {
+                            clear_readonly_recursive(&entry.path());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    impl Drop for TestTempDir {
+        fn drop(&mut self) {
+            clear_readonly_recursive(&self.path);
+            let _ = std::fs::remove_dir_all(&self.path);
+        }
+    }
+
+    #[cfg(unix)]
+    fn lock_target_for_failure(dir: &Path, _files: &[&Path]) {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+    }
+
+    #[cfg(not(unix))]
+    fn lock_target_for_failure(_dir: &Path, files: &[&Path]) {
+        for file in files {
+            let mut perms = std::fs::metadata(file).unwrap().permissions();
+            perms.set_readonly(true);
+            std::fs::set_permissions(file, perms).unwrap();
+        }
+    }
+
+    fn distinct_entry(n: usize) -> NewHistoryEntry {
+        NewHistoryEntry {
+            calculator: "percent".to_string(),
+            calculator_label: "% of Total".to_string(),
+            input_a: format!("{n}"),
+            input_b: "100".to_string(),
+            mode: None,
+            inputs_text: format!("{n} of 100"),
+            result_text: format!("{n}.00%"),
+            copy_text: format!("{n}.00%"),
+        }
+    }
+
     #[test]
     fn rejects_oversized_history_file_and_writes_atomically() {
-        let base = std::env::temp_dir().join(format!("pct-cmd-test-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&base);
-        std::fs::create_dir_all(&base).unwrap();
+        let temp = TestTempDir::new("pct-cmd-test");
+        let base = temp.path();
 
         let target = base.join("history.json");
         write_atomic_private(&target, br#"[]"#).unwrap();
@@ -1065,20 +1256,25 @@ mod tests {
             assert!(read_regular_file_limited(&link, 1024).is_err());
             assert!(write_atomic_private(&link, b"[]").is_err());
         }
-
-        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn semver_comparison_and_release_json_parsing_work() {
         assert_eq!(parse_semver_triplet("v2.1.1"), Some((2, 1, 1)));
+        assert_eq!(parse_semver_triplet("V2.2.0"), Some((2, 2, 0)));
         assert_eq!(parse_semver_triplet("2.10.0-beta.1"), Some((2, 10, 0)));
         assert_eq!(parse_semver_triplet("invalid"), None);
+        assert_eq!(parse_semver_triplet("vv2.2.0"), None);
+        assert_eq!(parse_semver_triplet("2.+10.0"), None);
+        assert_eq!(parse_semver_triplet("2..0"), None);
+        assert_eq!(parse_semver_triplet("2.1.0.4"), None);
+        assert_eq!(parse_semver_triplet("2.1"), None);
 
         assert!(is_newer_version("2.1.1", "v2.2.0"));
         assert!(is_newer_version("2.1.1", "v2.1.2"));
         assert!(!is_newer_version("2.1.1", "v2.1.1"));
         assert!(!is_newer_version("2.1.1", "v2.1.0"));
+        assert!(!is_newer_version("2.1.1", "vv2.2.0"));
 
         let payload = br#"{
             "tag_name": "v2.2.0",
@@ -1101,5 +1297,331 @@ mod tests {
         let sanitized = parse_github_release_json("2.1.1", untrusted_url_payload).unwrap();
         assert!(!sanitized.update_available);
         assert_eq!(sanitized.release_url, GITHUB_RELEASES_URL);
+    }
+
+    #[test]
+    fn release_json_rejects_draft_prerelease_long_published_at_and_bad_urls() {
+        for flag in ["draft", "prerelease"] {
+            let payload = serde_json::json!({
+                "tag_name": "v99.0.0",
+                flag: true,
+                "html_url": "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v99.0.0",
+                "published_at": "2026-11-15T12:00:00Z"
+            });
+            let res =
+                parse_github_release_json("2.2.0", &serde_json::to_vec(&payload).unwrap()).unwrap();
+            assert!(res.ok);
+            assert!(!res.update_available);
+            assert_eq!(res.latest_version, None);
+            assert_eq!(res.release_url, GITHUB_RELEASES_URL);
+            assert_eq!(res.published_at, None);
+            assert_eq!(res.error, None);
+        }
+
+        // Draft/prerelease is skipped before semver parsing, matching Mobile.
+        let draft_non_semver = br#"{
+            "tag_name": "nightly-draft",
+            "draft": true
+        }"#;
+        let draft_res = parse_github_release_json("2.2.0", draft_non_semver).unwrap();
+        assert!(draft_res.ok);
+        assert!(!draft_res.update_available);
+        assert_eq!(draft_res.latest_version, None);
+
+        let exact_64 = "T".repeat(64);
+        let over_65 = "T".repeat(65);
+        for (published, expected_some) in [
+            (exact_64.as_str(), true),
+            (over_65.as_str(), false),
+            ("   \t ", false),
+        ] {
+            let payload = serde_json::json!({
+                "tag_name": "v2.3.0",
+                "published_at": published
+            });
+            let res =
+                parse_github_release_json("2.2.0", &serde_json::to_vec(&payload).unwrap()).unwrap();
+            assert_eq!(res.published_at.is_some(), expected_some);
+        }
+
+        for bad_url in [
+            "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/../evil",
+            "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.3.0\\evil",
+            "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.3.0 extra",
+            "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.3.0\n",
+            "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.3.0\0",
+        ] {
+            let payload = serde_json::json!({
+                "tag_name": "v2.3.0",
+                "html_url": bad_url
+            });
+            let res =
+                parse_github_release_json("2.2.0", &serde_json::to_vec(&payload).unwrap()).unwrap();
+            assert_eq!(
+                res.release_url, GITHUB_RELEASES_URL,
+                "bad html_url must fall back: {bad_url:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn copy_text_length_and_input_control_char_boundaries() {
+        assert!(validate_copy_text("").is_ok());
+        assert!(validate_copy_text(&"a".repeat(MAX_COPY_LEN)).is_ok());
+        assert!(validate_copy_text(&"a".repeat(MAX_COPY_LEN + 1)).is_err());
+
+        // Limit is enforced on UTF-8 bytes, not char count.
+        let mut utf8_exact = "€".repeat(1365); // 4095 bytes
+        utf8_exact.push('a');
+        assert_eq!(utf8_exact.len(), MAX_COPY_LEN);
+        assert!(validate_copy_text(&utf8_exact).is_ok());
+        let utf8_over = "€".repeat(1366); // 4098 bytes
+        assert!(utf8_over.len() > MAX_COPY_LEN);
+        assert!(validate_copy_text(&utf8_over).is_err());
+
+        // Tax entry with mode: None remains accepted for desktop/Mobile parity.
+        let mut tax_none = sample_new_entry();
+        tax_none.mode = None;
+        assert_eq!(validate_new_entry(&tax_none), Ok(()));
+
+        for bad in ["100\0", "10\n", "10\r", "\x1b20", "\x7f5"] {
+            let mut a_bad = sample_new_entry();
+            a_bad.input_a = bad.to_string();
+            assert_eq!(
+                validate_new_entry(&a_bad),
+                Err("history input contains control characters")
+            );
+
+            let mut b_bad = sample_new_entry();
+            b_bad.input_b = bad.to_string();
+            assert_eq!(
+                validate_new_entry(&b_bad),
+                Err("history input contains control characters")
+            );
+        }
+    }
+
+    #[test]
+    fn stateful_history_and_settings_sequences_persist_and_rollback_atomically() {
+        use std::sync::Mutex;
+
+        let temp = TestTempDir::new("pct-seq-test");
+        let history_path = temp.path().join("history.json");
+        let settings_path = temp.path().join("settings.json");
+
+        let history = HistoryState {
+            in_memory_only: false,
+            entries: Mutex::new(Vec::new()),
+            next_id: Mutex::new(1),
+        };
+
+        // 1. Consecutive dedup preserves id=1 and next_id=2; non-consecutive re-adds as new.
+        let first = distinct_entry(10);
+        let list =
+            history_add_with_path(&history, first.clone(), || Ok(history_path.clone())).unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].id, 1);
+        assert_eq!(*history.next_id.lock().unwrap(), 2);
+
+        let list =
+            history_add_with_path(&history, first.clone(), || Ok(history_path.clone())).unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].id, 1);
+        assert_eq!(*history.next_id.lock().unwrap(), 2);
+
+        let second = distinct_entry(20);
+        let list = history_add_with_path(&history, second, || Ok(history_path.clone())).unwrap();
+        assert_eq!(list.len(), 2);
+        assert_eq!(list.iter().map(|e| e.id).collect::<Vec<_>>(), vec![2, 1]);
+
+        let list = history_add_with_path(&history, first, || Ok(history_path.clone())).unwrap();
+        assert_eq!(list.len(), 3);
+        assert_eq!(list.iter().map(|e| e.id).collect::<Vec<_>>(), vec![3, 2, 1]);
+
+        // 2. Cap eviction keeps newest 500 entries and evicts oldest (ids 1..=5).
+        for n in 4..=(HISTORY_MAX_ENTRIES + 5) {
+            let _ = history_add_with_path(&history, distinct_entry(n), || Ok(history_path.clone()))
+                .unwrap();
+        }
+        let capped = history_list_state(&history).unwrap();
+        assert_eq!(capped.len(), HISTORY_MAX_ENTRIES);
+        assert_eq!(capped[0].id, (HISTORY_MAX_ENTRIES + 5) as u64);
+        assert_eq!(capped[HISTORY_MAX_ENTRIES - 1].id, 6);
+        assert_eq!(load_history_from_path(&history_path), capped);
+
+        // 3. Delete no-op, targeted delete, and clear round-trip to disk.
+        let unchanged =
+            history_delete_with_path(&history, 999_999, || Ok(history_path.clone())).unwrap();
+        assert_eq!(unchanged.len(), HISTORY_MAX_ENTRIES);
+
+        let after_del =
+            history_delete_with_path(&history, 500, || Ok(history_path.clone())).unwrap();
+        assert_eq!(after_del.len(), HISTORY_MAX_ENTRIES - 1);
+        assert!(!after_del.iter().any(|e| e.id == 500));
+        assert_eq!(load_history_from_path(&history_path), after_del);
+
+        let cleared = history_clear_with_path(&history, || Ok(history_path.clone())).unwrap();
+        assert!(cleared.is_empty());
+        assert!(load_history_from_path(&history_path).is_empty());
+
+        // 4. saturating_add ID behavior near u64::MAX.
+        let max_state = HistoryState {
+            in_memory_only: true,
+            entries: Mutex::new(Vec::new()),
+            next_id: Mutex::new(u64::MAX - 1),
+        };
+        let list = history_add_with_path(&max_state, distinct_entry(1), || unreachable!()).unwrap();
+        assert_eq!(list[0].id, u64::MAX - 1);
+        assert_eq!(*max_state.next_id.lock().unwrap(), u64::MAX);
+        let list = history_add_with_path(&max_state, distinct_entry(2), || unreachable!()).unwrap();
+        assert_eq!(list[0].id, u64::MAX);
+        assert_eq!(*max_state.next_id.lock().unwrap(), u64::MAX);
+
+        // 5. Settings persistence round-trip and in_memory_only disk isolation.
+        let settings_state = SettingsState {
+            in_memory_only: false,
+            settings: Mutex::new(AppSettings::default()),
+        };
+        assert!(
+            get_settings_state(&settings_state)
+                .unwrap()
+                .check_updates_on_startup
+        );
+        let updated = set_settings_with_path(
+            &settings_state,
+            AppSettings {
+                check_updates_on_startup: false,
+            },
+            || Ok(settings_path.clone()),
+        )
+        .unwrap();
+        assert!(!updated.check_updates_on_startup);
+        assert_eq!(load_settings_from_path(&settings_path), updated);
+
+        let mem_only_settings = SettingsState {
+            in_memory_only: true,
+            settings: Mutex::new(AppSettings::default()),
+        };
+        let ghost_settings = temp.path().join("never-written-settings.json");
+        let res = set_settings_with_path(
+            &mem_only_settings,
+            AppSettings {
+                check_updates_on_startup: false,
+            },
+            || Ok(ghost_settings.clone()),
+        )
+        .unwrap();
+        assert!(!res.check_updates_on_startup);
+        assert!(!ghost_settings.exists());
+
+        // 6. Failing disk persistence preserves prior in-memory & disk state atomically.
+        let blocker_file = temp.path().join("blocker");
+        std::fs::write(&blocker_file, b"not-a-dir").unwrap();
+        let blocked_history_path = blocker_file.join("history.json");
+        let blocked_settings_path = blocker_file.join("settings.json");
+
+        let rollback_history = HistoryState {
+            in_memory_only: false,
+            entries: Mutex::new(Vec::new()),
+            next_id: Mutex::new(1),
+        };
+        let locked_dir = temp.path().join("locked");
+        std::fs::create_dir_all(&locked_dir).unwrap();
+        let locked_history = locked_dir.join("history.json");
+        let locked_settings = locked_dir.join("settings.json");
+
+        let seed_entries = history_add_with_path(&rollback_history, distinct_entry(42), || {
+            Ok(locked_history.clone())
+        })
+        .unwrap();
+        let rollback_settings = SettingsState {
+            in_memory_only: false,
+            settings: Mutex::new(AppSettings::default()),
+        };
+        set_settings_with_path(
+            &rollback_settings,
+            AppSettings {
+                check_updates_on_startup: true,
+            },
+            || Ok(locked_settings.clone()),
+        )
+        .unwrap();
+
+        assert!(
+            history_add_with_path(&rollback_history, distinct_entry(43), || {
+                Ok(blocked_history_path.clone())
+            })
+            .is_err()
+        );
+        assert_eq!(history_list_state(&rollback_history).unwrap(), seed_entries);
+        assert_eq!(*rollback_history.next_id.lock().unwrap(), 2);
+        assert!(set_settings_with_path(
+            &rollback_settings,
+            AppSettings {
+                check_updates_on_startup: false
+            },
+            || Ok(blocked_settings_path)
+        )
+        .is_err());
+        assert!(
+            get_settings_state(&rollback_settings)
+                .unwrap()
+                .check_updates_on_startup
+        );
+
+        let before_history_bytes = std::fs::read(&locked_history).unwrap();
+        let before_settings_bytes = std::fs::read(&locked_settings).unwrap();
+
+        lock_target_for_failure(&locked_dir, &[&locked_history, &locked_settings]);
+
+        assert!(
+            history_add_with_path(&rollback_history, distinct_entry(99), || {
+                Ok(locked_history.clone())
+            })
+            .is_err()
+        );
+        assert!(
+            history_delete_with_path(&rollback_history, 1, || { Ok(locked_history.clone()) })
+                .is_err()
+        );
+        assert!(
+            history_clear_with_path(&rollback_history, || { Ok(locked_history.clone()) }).is_err()
+        );
+        assert!(set_settings_with_path(
+            &rollback_settings,
+            AppSettings {
+                check_updates_on_startup: false
+            },
+            || Ok(locked_settings.clone()),
+        )
+        .is_err());
+
+        clear_readonly_recursive(&locked_dir);
+
+        assert_eq!(history_list_state(&rollback_history).unwrap(), seed_entries);
+        assert_eq!(*rollback_history.next_id.lock().unwrap(), 2);
+        assert!(
+            get_settings_state(&rollback_settings)
+                .unwrap()
+                .check_updates_on_startup
+        );
+        assert_eq!(
+            std::fs::read(&locked_history).unwrap(),
+            before_history_bytes
+        );
+        assert_eq!(
+            std::fs::read(&locked_settings).unwrap(),
+            before_settings_bytes
+        );
+
+        let leftover_tmp: Vec<_> = std::fs::read_dir(&locked_dir)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))
+            .collect();
+        assert!(
+            leftover_tmp.is_empty(),
+            "stray tmp files left: {leftover_tmp:?}"
+        );
     }
 }

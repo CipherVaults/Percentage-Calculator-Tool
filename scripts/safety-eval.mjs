@@ -2043,16 +2043,15 @@ async function createDesktopSandbox(artifacts, rustBridge, opts = {}) {
   }
 
   async function drain() {
+    const deadline = Date.now() + 12000;
     let spins = 0;
-    while (spins < 500) {
+    while (Date.now() < deadline) {
       spins += 1;
-      await new Promise((r) => setImmediate(r));
+      await new Promise((r) => (spins <= 25 ? setImmediate(r) : setTimeout(r, 1)));
       const waitingOnNonHeld = activeInFlight - backend.getHeldQueue().length;
-      if (waitingOnNonHeld <= 0) break;
+      if (waitingOnNonHeld <= 0) return;
     }
-    if (spins >= 500) {
-      throw new Error("DESKTOP_ASYNC_DRAIN_TIMEOUT");
-    }
+    throw new Error("DESKTOP_ASYNC_DRAIN_TIMEOUT");
   }
 
   await drain();
@@ -2249,13 +2248,14 @@ async function createMobileSandbox(artifacts, opts = {}) {
   artifacts.mobileVmScript.runInContext(ctx);
 
   async function drain() {
+    const deadline = Date.now() + 12000;
     let spins = 0;
-    while (spins < 500) {
+    while (Date.now() < deadline) {
       spins += 1;
-      await new Promise((r) => setImmediate(r));
-      if (activeInFlight <= 0) break;
+      await new Promise((r) => (spins <= 25 ? setImmediate(r) : setTimeout(r, 1)));
+      if (activeInFlight <= 0) return;
     }
-    if (spins >= 500) throw new Error("MOBILE_ASYNC_DRAIN_TIMEOUT");
+    throw new Error("MOBILE_ASYNC_DRAIN_TIMEOUT");
   }
 
   await drain();

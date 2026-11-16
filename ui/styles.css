@@ -106,6 +106,107 @@ body {
   box-shadow: inset 0 0 0 1px rgba(148, 197, 154, 0.45);
 }
 
+.calc-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+}
+
+.calc-card-heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.calc-card-heading .section-subtitle {
+  margin-bottom: 0;
+}
+
+.drag-handle,
+.collapse-btn {
+  flex-shrink: 0;
+  background: #0E0F12;
+  border: 1px solid #3a3f4c;
+  color: #94C59A;
+  font: inherit;
+  line-height: 1.5;
+  padding: 0.2rem 0.45rem;
+}
+
+.drag-handle {
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.collapse-btn {
+  cursor: pointer;
+  white-space: nowrap;
+  font-size: 0.75rem;
+}
+
+.drag-handle:hover,
+.collapse-btn:hover,
+.drag-handle:focus-visible,
+.collapse-btn:focus-visible {
+  color: #E9A715;
+  border-color: #E9A715;
+  outline: 1px solid #E9A715;
+  outline-offset: 2px;
+}
+
+.calc-section.card-collapsed .calc-card-body {
+  display: none;
+}
+
+.calc-section.card-collapsed .calc-card-header {
+  margin-bottom: 0;
+}
+
+.calc-section.card-dragging {
+  opacity: 0.55;
+  border-left-color: #94C59A;
+}
+
+.calc-section.card-drop-before {
+  box-shadow: 0 -3px 0 #E9A715;
+}
+
+.calc-section.card-drop-after {
+  box-shadow: 0 3px 0 #E9A715;
+}
+
+.preset-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0.2rem 0 0.75rem;
+}
+
+.preset-btn {
+  background: #0E0F12;
+  border: 1px solid #3a3f4c;
+  border-radius: 999px;
+  color: #94C59A;
+  font: inherit;
+  font-size: 0.72rem;
+  padding: 0.2rem 0.7rem;
+  cursor: pointer;
+}
+
+.preset-btn:hover,
+.preset-btn:focus-visible {
+  background: #161822;
+  border-color: #E9A715;
+  color: #E9A715;
+  outline: 1px solid #E9A715;
+  outline-offset: 2px;
+}
+
 .update-banner {
   background: #161822;
   border: 1px solid #3a3f4c;

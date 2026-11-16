@@ -117,8 +117,8 @@ Following full source security audits, **v2.1.1** and **v2.2.1** apply defense-i
   - Replaced potential prototype/sink pitfalls in [`ui/main.js`](ui/main.js) with zero `innerHTML` usage, `Object.hasOwn` lookup guards, bounded field validation, and structured IPC error recovery.
 - **Mobile & Web PWA (`mobile/`):**
   - Protected [`mobile/index.html`](mobile/index.html) with `<meta name="referrer" content="no-referrer">` and a strict `<meta http-equiv="Content-Security-Policy">` pinning exact Base64 SHA-256 hashes for the inline `<style>` and `<script>` blocks alongside `default-src 'none'`, `worker-src 'self'`, `img-src 'self' data:`, `manifest-src 'self'`, `connect-src 'self' https://api.github.com`, `object-src 'none'`, `base-uri 'none'`, and `form-action 'none'` (zero inline `style.*` mutations).
-  - Hardened `localStorage` history & settings loading with plain-object validation, `256`-character field caps, allowlisted calculator modes, `Object.hasOwn` lookup safety, clean empty resets when cleared/corrupted, and cross-tab `storage` synchronization.
-  - Hardened [`mobile/sw.js`](mobile/sw.js) (`pct-tool-v2.2.1-mobile-1`) with same-origin checks, registration scope-pathname prefix verification, `!response.redirected`, strict app-shell & `text/html` navigation caching checks, and decoupled Cache Storage error handling.
+  - Hardened `localStorage` history & settings loading with plain-object validation, `256`-character field caps, allowlisted calculator modes, strict `cardOrder`/`collapsedCards` layout validation, whole-integer `>= 1` `inputC` enforcement for Tip & Bill Split entries, `Object.hasOwn` lookup safety, clean empty resets when cleared/corrupted, and cross-tab `storage` synchronization.
+  - Hardened [`mobile/sw.js`](mobile/sw.js) (updated to `pct-tool-v2.3.0-mobile-1` in v2.3.0) with same-origin checks, registration scope-pathname prefix verification, `!response.redirected`, strict app-shell & `text/html` navigation caching checks, and decoupled Cache Storage error handling.
 - **Supply Chain & Release Integrity (`.github/workflows/`, `.gitattributes`):**
   - Pinned all GitHub Actions in [`build.yml`](.github/workflows/build.yml) and [`pages.yml`](.github/workflows/pages.yml) to immutable 40-character commit SHAs with `persist-credentials: false`.
   - Split unprivileged build jobs (`contents: read`) from `main`/tag-only release publishing (`contents: write`), enforced `--locked` Rust builds, automated 10k parity + exact per-directive SHA-256 CSP digest verification (`style-src` & `script-src`) + DOM/eval sink checks on Linux, Windows, and GitHub Pages deploys (`refs/heads/main` only), pinned LF line endings in `.gitattributes`, enforced single-installer stage & immutable existing tag/release rules, and generated `SHA256SUMS.txt` on every release.
@@ -164,6 +164,7 @@ crates/percent-core/    Pure Rust percentage math + unit & 10k golden parity tes
 src-tauri/              Tauri v2 desktop shell, hardened commands, icons, capabilities
 ui/                     Desktop Tauri frontend HTML, CSS, and JS controller
 mobile/                 Standalone single-file HTML, scoped SW, manifest & mobile icons
+scripts/                Cross-surface safety evaluation harness (Node + Rust eval bridge)
 assets/                 Source app icons and README preview screenshots
 reference/              Original single-file HTML utility (v1.1)
 Documentation/          Project context, architecture, roadmap, and session summary
@@ -205,7 +206,11 @@ End-to-end desktop smoke test (launches the real Tauri app in hidden mode and ve
 cargo run -p percentage-calculator-tool -- --smoke-test
 ```
 
-`scripts/safety-eval.mjs` verifies all four Tip & Bill Split preset clicks (`10%`, `15%`, `18%`, `20%`) across Desktop and Mobile.
+`scripts/safety-eval.mjs` verifies all four Tip & Bill Split preset clicks (`10%`, `15%`, `18%`, `20%`) and full cross-surface parity (`Rust`, `Desktop`, `Mobile`) across 26,029 checks:
+
+```powershell
+node scripts/safety-eval.mjs --require-clean-git
+```
 
 ---
 

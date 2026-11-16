@@ -199,11 +199,13 @@ Unit tests (math + storage/validation) and the 10,661-case v1.1 golden parity su
 cargo test --workspace --locked
 ```
 
-End-to-end desktop smoke test (launches the real Tauri app in hidden mode and verifies focus, all eight calculators, input swapping, Markup & Margin, Reverse Tax/VAT add & extract, Tip & Bill Split with 10%/15%/18%/20% presets, negative formula parentheses, paste sanitization, overflow handling, error copy blocking, persistent history add/filter/restore/delete/clear (including 3-field Tip & Bill Split restore), collapse/expand, handle-only card reordering with synced quick-nav, reset layout, dark About & Settings modals, mocked startup/manual update check, copy feedback, Clear All, version `2.3.0`, and the system clipboard):
+End-to-end desktop smoke test (launches the real Tauri app in hidden mode and verifies focus, all eight calculators, input swapping, Markup & Margin, Reverse Tax/VAT add & extract, Tip & Bill Split with a `20%` preset click, negative formula parentheses, paste sanitization, overflow handling, error copy blocking, persistent history add/filter/restore/delete/clear (including 3-field Tip & Bill Split restore), collapse/expand, handle-only card reordering with synced quick-nav, reset layout, dark About & Settings modals, mocked startup/manual update check, copy feedback, Clear All, version `2.3.0`, and the system clipboard):
 
 ```powershell
 cargo run -p percentage-calculator-tool -- --smoke-test
 ```
+
+`scripts/safety-eval.mjs` verifies all four Tip & Bill Split preset clicks (`10%`, `15%`, `18%`, `20%`) across Desktop and Mobile.
 
 ---
 

@@ -3694,7 +3694,7 @@ async function runSliceA(artifacts, rustBridge, rng) {
       { id: "negative-tip", a: 100, b: -5, c: 2, field: 1 },
       { id: "zero-people", a: 100, b: 15, c: 0, field: 2 },
       { id: "fractional-people", a: 100, b: 15, c: 1.5, field: 2 },
-      { id: "infinite-people", a: 100, b: 15, c: "Infinity", field: 2 },
+      { id: "infinite-people", a: 100, b: 15, c: "1e309", field: 2 },
     ];
     for (const tc of tipCases) {
       for (const route of ["input", "paste"]) {
@@ -3709,8 +3709,8 @@ async function runSliceA(artifacts, rustBridge, rng) {
           simulateBrowserPaste(input, encodeNumInput(pasted));
           await sandbox.drain();
           out = readUiCalculation(sandbox, "tip");
-          // Rejected non-finite paste preserves the valid pre-seeded people count.
-          if (tc.c === "Infinity") {
+          // Decimal overflow passes number-input syntax, but paste rejects it and preserves "2".
+          if (tc.id === "infinite-people") {
             recordA5(surf.name, `${tc.id}-paste-value`, {
               afterValue: input.value, domInjectedMarkup: false, resultText: out.resultText, broken: out.broken, brokenReason: out.reason,
             }, { kind: "paste_guard", expectAccepted: false, preSeedValue: "2" },
@@ -3718,7 +3718,9 @@ async function runSliceA(artifacts, rustBridge, rng) {
             oracle = computeReferenceOracle("tip", null, 100, 15, 2);
           }
         }
-        recordA5(surf.name, `${tc.id}-${route}`, { ...out, brokenReason: out.reason }, calcUiSpec(oracle),
+        const spec = calcUiSpec(oracle);
+        if (tc.id === "infinite-people" && route === "input") spec.errorCategory = "out-of-range";
+        recordA5(surf.name, `${tc.id}-${route}`, { ...out, brokenReason: out.reason }, spec,
           "adversarial_tip_input", "tip_domain_guard");
         const control = await uiSetInputsAndEvaluate(sandbox, "tip", null, 80, 0, 2);
         recordA5(surf.name, `${tc.id}-${route}-zero-tip-control`, { ...control, brokenReason: control.reason },
@@ -3788,6 +3790,26 @@ async function runSliceA(artifacts, rustBridge, rng) {
       : fresh.storage.getItem("pct_tool_settings_v1") !== settingsBeforeReset;
     recordA5(surf.name, "layout-reset-persists", resetObservation, layoutSpec(DEFAULT_CARD_ORDER, [], { requirePersistence: true }),
       "benign_reset_layout", "card_layout_reset");
+  }
+
+  // Literal Infinity is invalid number-input syntax; test raw math and IPC directly.
+  const peopleError = "People must be a whole number (1 or more)";
+  const rawTipSpec = {
+    kind: "raw_math", expectRawOk: false, expectedRawError: peopleError, enforceNoInfiniteDisplay: true,
+  };
+  const mobileTipRaw = createMobilePureMathRunner(artifacts).runCalc("tip", null, 100, 15, Infinity);
+  recordA5("mobile_raw_math", "infinite-people", {
+    rawOk: mobileTipRaw.ok === true || mobileTipRaw.ok === "true",
+    rawDisplay: String(mobileTipRaw.error ?? ""), broken: false,
+  }, rawTipSpec, "adversarial_tip_input", "tip_raw_people_guard");
+  for (const surface of ["core", "ipc"]) {
+    const response = await rustBridge.call(surface, "tip_split", 100, 15, null, Infinity);
+    const raw = surface === "core" && response.ok ? response.result : response;
+    recordA5(surface === "core" ? "rust_core" : "rust_ipc", "infinite-people", {
+      rawOk: raw?.ok === true || raw?.ok === "true", rawDisplay: String(raw?.error ?? ""),
+      broken: Boolean(response.broken), brokenReason: response.reason,
+    }, { ...rawTipSpec, expectedRawError: surface === "core" ? peopleError : undefined },
+    "adversarial_tip_input", "tip_raw_people_guard");
   }
 
   const orthogonality = auditFactorialOrthogonality(factorialMeta, [
@@ -3873,7 +3895,7 @@ async function runSliceB(artifacts, rustBridge, mobileMath, rng, goldenPairSet) 
     }
   }
 
-  for (const c of [0, 1.5, Infinity, -1]) {
+  for (const c of [0, 1.5, "1e309", -1]) {
     addUniqueItem({ calcId: "tip", mode: null, a: 137.49, b: 17.25, c,
       a_regime: "boundary", b_regime: "boundary", subCategory: "tip_people_boundary" });
   }
@@ -4017,8 +4039,8 @@ async function runSliceB(artifacts, rustBridge, mobileMath, rng, goldenPairSet) 
     const oracle = computeReferenceOracle(it.calcId, it.mode, it.a, it.b, it.c ?? 1);
 
     // 1. Mobile Raw Math (2-pass replay)
-    const mobMath1 = mobileMath.runCalc(it.calcId, it.mode, it.a, it.b, it.c ?? 1);
-    const mobMath2 = mobileMath.runCalc(it.calcId, it.mode, it.a, it.b, it.c ?? 1);
+    const mobMath1 = mobileMath.runCalc(it.calcId, it.mode, it.a, it.b, Number(it.c ?? 1));
+    const mobMath2 = mobileMath.runCalc(it.calcId, it.mode, it.a, it.b, Number(it.c ?? 1));
     const mobMathReplay = deepEqualObjectIs(mobMath1, mobMath2);
     const mobMathDisplay = mobMath1.ok === true || mobMath1.ok === "true"
       ? (mobMath1.label || mobMath1.formatted || mobMath1.copyText || JSON.stringify(mobMath1))

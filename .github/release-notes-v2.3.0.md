@@ -8,7 +8,7 @@
 
 - **Tip & Bill Split (8th Calculator — Desktop & Mobile Parity):**
   - Calculates tip amount, total bill, and per-person split from Bill amount, Tip %, and a whole-number People split, with quick preset pills (`10%`, `15%`, `18%`, `20%`) and `swap values`.
-  - Uses `calc_tip_split` in `percent-core` / `src-tauri` and `calcTipSplit` in `mobile/index.html` with 100% Desktop/Mobile parity and backward-compatible 3-field history (`inputC`, optional for existing 2-field calculators and required for `"tip"`).
+  - Uses `calculate_tip_split` in `percent-core` (`calc_tip_split` in `src-tauri`) and `calcTipSplit` in `mobile/index.html` with 100% Desktop/Mobile parity and backward-compatible 3-field history (`inputC`, optional for existing 2-field calculators and required for `"tip"`).
 
 - **Drag-Handle (`⠿`) Card Reordering & Card Collapsing (`[ − ]` / `[ + ]`):**
   - Pointer-based handle-only reordering persists `cardOrder` as an exact 8-card permutation, synced with `.quick-nav`; collapsible card bodies persist `collapsedCards` and auto-expand on quick-nav or History `↺ restore`.

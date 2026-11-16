@@ -184,6 +184,12 @@ function buildValidHistoryCandidate(candidate) {
   ) {
     return null;
   }
+  if (candidate.calculator === "tip") {
+    const cleanedC = sanitizeNumericString(inputC);
+    if (!isFiniteDecimalString(cleanedC)) return null;
+    const numC = Number(cleanedC);
+    if (!Number.isFinite(numC) || !Number.isInteger(numC) || numC < 1) return null;
+  }
   const mode = candidate.mode ?? null;
   if (mode !== null && mode !== "add" && mode !== "extract") {
     return null;
@@ -970,7 +976,7 @@ async function restoreHistoryEntry(entry) {
   if (!buildValidHistoryCandidate(entry) || !Object.hasOwn(map, entry.calculator)) return;
   const target = map[entry.calculator];
 
-  if (!await expandCard(entry.calculator)) return;
+  expandCard(entry.calculator);
 
   if (entry.calculator === "tax" && entry.mode) {
     await setTaxMode(entry.mode, false);
@@ -1215,6 +1221,7 @@ function normalizeSettings(settings) {
 let currentSettings = normalizeSettings(null);
 let lastPersistedSettings = normalizeSettings(null);
 let settingsSeq = 0;
+let settingsLoadPromise = Promise.resolve();
 let settingsSaveQueue = Promise.resolve();
 let latestReleaseUrl = RELEASE_URL;
 let cardDrag = null;
@@ -1252,16 +1259,19 @@ function applySettings(settings) {
   if (toggle) toggle.checked = settings.checkUpdatesOnStartup;
 }
 
-function saveSettings(changes) {
+function saveSettings(changesOrUpdater, { keepExpandedOnError } = {}) {
   const ticket = ++settingsSeq;
-  const next = normalizeSettings({ ...currentSettings, ...changes });
-  currentSettings = normalizeSettings(next);
+  const optimisticPatch = typeof changesOrUpdater === "function" ? changesOrUpdater(currentSettings) : changesOrUpdater;
+  currentSettings = normalizeSettings({ ...currentSettings, ...optimisticPatch });
   applySettings(currentSettings);
 
   // Serialize writes as well as guarding UI replies: the backend must finish
   // an earlier write before a newer snapshot can become persistent state.
   const save = settingsSaveQueue.then(async () => {
     try {
+      await settingsLoadPromise;
+      const patch = typeof changesOrUpdater === "function" ? changesOrUpdater(lastPersistedSettings) : changesOrUpdater;
+      const next = normalizeSettings({ ...lastPersistedSettings, ...patch });
       const saved = await invoke("set_settings", { settings: next });
       lastPersistedSettings = normalizeSettings(saved ?? next);
       if (ticket === settingsSeq) {
@@ -1273,6 +1283,7 @@ function saveSettings(changes) {
       if (ticket === settingsSeq) {
         currentSettings = normalizeSettings(lastPersistedSettings);
         applySettings(currentSettings);
+        if (keepExpandedOnError) showExpandedCard(keepExpandedOnError);
         setUpdateStatus("Failed to save settings. Restored the last saved layout and preferences.", true);
       }
       return false;
@@ -1282,14 +1293,21 @@ function saveSettings(changes) {
   return save;
 }
 
-async function expandCard(key) {
+function showExpandedCard(key) {
+  const card = document.getElementById(`card-${key}`);
+  card?.classList.remove("card-collapsed");
+  const button = card?.querySelector(".collapse-btn");
+  button?.setAttribute("aria-expanded", "true");
+  if (button) button.textContent = "[ − ]";
+}
+
+function expandCard(key) {
   if (!ALLOWED_CALCULATORS.has(key)) return false;
-  if (currentSettings.collapsedCards.includes(key)) {
-    await saveSettings({ collapsedCards: currentSettings.collapsedCards.filter((item) => item !== key) });
-  } else {
-    await settingsSaveQueue;
-  }
-  return !currentSettings.collapsedCards.includes(key);
+  currentSettings.collapsedCards = currentSettings.collapsedCards.filter((item) => item !== key);
+  showExpandedCard(key);
+  void saveSettings((prev) => ({ collapsedCards: prev.collapsedCards.filter((item) => item !== key) }),
+    { keepExpandedOnError: key });
+  return true;
 }
 
 function clearCardDropHints() {
@@ -1309,19 +1327,20 @@ function updateCardDropTarget(x, y) {
     if (!rect || ![rect.top, rect.bottom, rect.left, rect.right].every(Number.isFinite)) continue;
     cards.push({ card, rect });
   }
-  let target = cards.find(({ rect }) =>
-    x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
-  );
-  if (!target && cards.length > 0) {
-    const containerRect = document.getElementById("cardsContainer")?.getBoundingClientRect?.();
-    const inHorizontalBand = (containerRect && x >= containerRect.left - 80 && x <= containerRect.right + 80) ||
-      cards.some(({ rect }) => x >= rect.left && x <= rect.right);
-    if (inHorizontalBand && y >= cards[0].rect.top && y <= cards[cards.length - 1].rect.bottom) {
-      const distance = ({ rect }) => Math.max(rect.top - y, y - rect.bottom, 0);
-      target = cards.reduce((closest, candidate) => distance(candidate) < distance(closest) ? candidate : closest);
-    }
+  if (cards.length === 0) return;
+  const containerRect = document.getElementById("cardsContainer")?.getBoundingClientRect?.();
+  const inHorizontalBand = (containerRect && x >= containerRect.left - 80 && x <= containerRect.right + 80) ||
+    cards.some(({ rect }) => x >= rect.left && x <= rect.right);
+  if (!inHorizontalBand) return;
+  let target;
+  if (y < cards[0].rect.top) {
+    target = cards[0];
+  } else if (y > cards[cards.length - 1].rect.bottom) {
+    target = cards[cards.length - 1];
+  } else {
+    const distance = ({ rect }) => Math.abs(y - (rect.top + rect.bottom) / 2);
+    target = cards.reduce((closest, candidate) => distance(candidate) < distance(closest) ? candidate : closest);
   }
-  if (!target) return;
   cardDrag.target = target.card;
   cardDrag.after = y >= (target.rect.top + target.rect.bottom) / 2;
   target.card.classList.add(cardDrag.after ? "card-drop-after" : "card-drop-before");
@@ -1372,9 +1391,8 @@ function bindCardLayout() {
     const key = card.dataset.calc;
     card.querySelector(".collapse-btn")?.addEventListener("click", () => {
       finishCardDrag(true);
-      const collapsed = currentSettings.collapsedCards;
-      saveSettings({ collapsedCards: collapsed.includes(key)
-        ? collapsed.filter((item) => item !== key) : [...collapsed, key] });
+      saveSettings((prev) => ({ collapsedCards: prev.collapsedCards.includes(key)
+        ? prev.collapsedCards.filter((item) => item !== key) : [...prev.collapsedCards, key] }));
     });
     const handle = card.querySelector(".drag-handle");
     handle?.addEventListener("pointerdown", (event) => {
@@ -1416,11 +1434,11 @@ function bindCardLayout() {
     if (event.key === "Escape") finishCardDrag(true);
   });
   document.querySelectorAll(".quick-nav .quick-link[data-calc]").forEach((link) => {
-    link.addEventListener("click", async (event) => {
+    link.addEventListener("click", (event) => {
       const key = link.dataset.calc;
       if (!currentSettings.collapsedCards.includes(key)) return;
       event.preventDefault();
-      if (!await expandCard(key)) return;
+      expandCard(key);
       window.location.hash = `card-${key}`;
       const card = document.getElementById(`card-${key}`);
       card?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1535,19 +1553,23 @@ async function openReleasePage() {
 
 async function loadSettingsAndMaybeCheckUpdates(isSmokeMode = false) {
   const ticket = ++settingsSeq;
-  let loadedSettings;
-  try {
-    loadedSettings = normalizeSettings(await invoke("get_settings"));
-  } catch {
-    loadedSettings = normalizeSettings({ checkUpdatesOnStartup: false });
-  }
-  if (ticket !== settingsSeq) return;
-  lastPersistedSettings = normalizeSettings(loadedSettings);
-  currentSettings = normalizeSettings(loadedSettings);
-  applySettings(currentSettings);
-  if (currentSettings.checkUpdatesOnStartup && !isSmokeMode) {
-    runUpdateCheck(false);
-  }
+  settingsLoadPromise = (async () => {
+    let loadedSettings;
+    try {
+      loadedSettings = await invoke("get_settings");
+    } catch {
+      loadedSettings = { checkUpdatesOnStartup: false };
+    }
+    lastPersistedSettings = normalizeSettings(loadedSettings);
+    if (ticket === settingsSeq) {
+      currentSettings = normalizeSettings(lastPersistedSettings);
+      applySettings(currentSettings);
+      if (currentSettings.checkUpdatesOnStartup && !isSmokeMode) {
+        runUpdateCheck(false);
+      }
+    }
+  })();
+  await settingsLoadPromise;
 }
 
 function bindControls() {
@@ -2354,6 +2376,18 @@ async function runSmokeTests() {
     layoutToggle.checked = true;
     layoutToggle.dispatchEvent(new Event("change"));
     await settingsSaveQueue;
+    const lastRect = document.getElementById("cardsContainer").lastElementChild.getBoundingClientRect();
+    const handleRect = handle.getBoundingClientRect();
+    const pastLastPointer = { bubbles: true, cancelable: true, pointerId: 24, pointerType: "mouse", isPrimary: true, button: 0 };
+    const pastLastPosition = { clientX: lastRect.left + 10, clientY: lastRect.bottom + 40 };
+    handle.dispatchEvent(new PointerEvent("pointerdown", { ...pastLastPointer, clientX: handleRect.left + 4, clientY: handleRect.top + 4 }));
+    handle.dispatchEvent(new PointerEvent("pointermove", { ...pastLastPointer, ...pastLastPosition }));
+    handle.dispatchEvent(new PointerEvent("pointerup", { ...pastLastPointer, ...pastLastPosition }));
+    await settingsSaveQueue;
+    const movedToEnd = [...reordered.filter((key) => key !== "change"), "change"];
+    check("pointer-drag-past-last-card", document.getElementById("cardsContainer").lastElementChild === dragCard &&
+      sameOrder(cardOrder(), movedToEnd) && sameOrder(navOrder(), movedToEnd) &&
+      sameOrder((await invoke("get_settings")).cardOrder, movedToEnd));
     document.getElementById("settingsBtn").click();
     document.getElementById("resetLayoutBtn").click();
     await settingsSaveQueue;

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'sha256-y7PiUvGHgOtssWy4oWu+3eyhobGOPhpXdDGRRQ5evAg='; script-src 'sha256-D7NghmsCoB9FfmTU2Dhl4+Ug/4HQMo9pLucc3DSLY4I='; worker-src 'self'; child-src 'self'; img-src 'self' data:; manifest-src 'self'; connect-src 'self' https://api.github.com; object-src 'none'; base-uri 'none'; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'sha256-y7PiUvGHgOtssWy4oWu+3eyhobGOPhpXdDGRRQ5evAg='; script-src 'sha256-PLzDTb1qlTFnnvVKtnFm38rfCOgkB+qZ1GbCvv9bNfo='; worker-src 'self'; child-src 'self'; img-src 'self' data:; manifest-src 'self'; connect-src 'self' https://api.github.com; object-src 'none'; base-uri 'none'; form-action 'none';">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0E0F12">
   <meta name="color-scheme" content="dark">
@@ -1832,6 +1832,14 @@
     );
   }
 
+  function isValidTipPeopleField(value) {
+    if (!isValidHistoryField(value)) return false;
+    const cleaned = sanitizeNumericString(value);
+    if (!isFiniteDecimalString(cleaned)) return false;
+    const num = Number(cleaned);
+    return Number.isFinite(num) && Number.isInteger(num) && num >= 1;
+  }
+
   function sanitizeHistoryItem(item) {
     if (!item || typeof item !== "object" || Array.isArray(item)) return null;
     if (!ALLOWED_CALCULATORS.has(item.calculator)) return null;
@@ -1839,8 +1847,9 @@
       !isValidHistoryField(item.calculatorLabel) ||
       !isValidHistoryField(item.inputA) ||
       !isValidHistoryField(item.inputB) ||
-      ((item.calculator === "tip" || item.inputC != null) &&
-        !isValidHistoryField(item.inputC)) ||
+      (item.calculator === "tip"
+        ? !isValidTipPeopleField(item.inputC)
+        : item.inputC != null && !isValidHistoryField(item.inputC)) ||
       !isValidHistoryField(item.inputsText) ||
       !isValidHistoryField(item.resultText)
     ) {
@@ -1881,8 +1890,9 @@
       !isValidHistoryField(candidate.calculatorLabel) ||
       !isValidHistoryField(candidate.inputA) ||
       !isValidHistoryField(candidate.inputB) ||
-      ((candidate.calculator === "tip" || candidate.inputC != null) &&
-        !isValidHistoryField(candidate.inputC)) ||
+      (candidate.calculator === "tip"
+        ? !isValidTipPeopleField(candidate.inputC)
+        : candidate.inputC != null && !isValidHistoryField(candidate.inputC)) ||
       !isValidHistoryField(candidate.inputsText) ||
       !isValidHistoryField(candidate.resultText) ||
       !isValidHistoryField(candidate.copyText, true)
@@ -2121,10 +2131,21 @@
     const drag = cardDrag;
     if (!drag?.moved) return;
     const cards = [...document.querySelectorAll("#cardsContainer > .calc-section")]
-      .filter((card) => card !== drag.card);
+      .filter((card) => card !== drag.card)
+      .map((card) => ({ card, rect: card.getBoundingClientRect() }));
     drag.target = null;
-    for (const card of cards) {
-      const rect = card.getBoundingClientRect();
+    const columnRect = document.getElementById("cardsContainer").getBoundingClientRect();
+    const minLeft = columnRect.width > 0
+      ? columnRect.left : Math.min(...cards.map(({ rect }) => rect.left));
+    const maxRight = columnRect.width > 0
+      ? columnRect.right : Math.max(...cards.map(({ rect }) => rect.right));
+    if (
+      maxRight > minLeft && Number.isFinite(drag.x) &&
+      (drag.x < minLeft - 48 || drag.x > maxRight + 48)
+    ) {
+      return;
+    }
+    for (const { card, rect } of cards) {
       drag.target = card;
       drag.before = drag.y < rect.top + rect.height / 2;
       if (drag.y <= rect.bottom) break;
@@ -2189,7 +2210,8 @@
         handle.focus({ preventScroll: true });
         cardDrag = {
           card, handle, pointerId: event.pointerId,
-          startX: event.clientX, startY: event.clientY, y: event.clientY,
+          startX: event.clientX, startY: event.clientY,
+          x: event.clientX, y: event.clientY,
           moved: false, target: null, before: true, frame: 0
         };
       });
@@ -2198,6 +2220,7 @@
       const drag = cardDrag;
       if (!drag || event.pointerId !== drag.pointerId) return;
       event.preventDefault();
+      drag.x = event.clientX;
       drag.y = event.clientY;
       if (!drag.moved) {
         if (Math.hypot(event.clientX - drag.startX, drag.y - drag.startY) < 6) return;
@@ -2209,6 +2232,7 @@
     });
     document.addEventListener("pointerup", (event) => {
       if (cardDrag?.pointerId !== event.pointerId) return;
+      cardDrag.x = event.clientX;
       cardDrag.y = event.clientY;
       updateDropTarget();
       finishCardDrag(true);
@@ -3097,6 +3121,7 @@
     };
 
     if (!entry || !Object.hasOwn(map, entry.calculator)) return;
+    if (entry.calculator === "tip" && !isValidTipPeopleField(entry.inputC)) return;
     const target = map[entry.calculator];
 
     if (entry.calculator === "tax" && entry.mode) {

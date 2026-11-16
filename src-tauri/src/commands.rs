@@ -15,7 +15,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use percent_core::{
     calculate_discount, calculate_markup_margin, calculate_original_value,
     calculate_percentage_change, calculate_percentage_of_total, calculate_percentage_portion,
-    calculate_tax, CalcResult, DiscountResult, MarkupMarginResult, TaxMode, TaxResult,
+    calculate_tax, calculate_tip_split, CalcResult, DiscountResult, MarkupMarginResult, TaxMode,
+    TaxResult, TipSplitResult,
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
@@ -29,7 +30,7 @@ const SETTINGS_MAX_FILE_BYTES: usize = 4096;
 const MAX_FIELD_LEN: usize = 256;
 const MAX_COPY_LEN: usize = 4096;
 const ALLOWED_CALCULATORS: &[&str] = &[
-    "change", "percent", "what", "discount", "base", "markup", "tax",
+    "change", "percent", "what", "discount", "base", "markup", "tax", "tip",
 ];
 pub const GITHUB_LATEST_RELEASE_API: &str =
     "https://api.github.com/repos/CipherVaults/Percentage-Calculator-Tool/releases/latest";
@@ -48,16 +49,52 @@ static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 pub struct AppSettings {
     #[serde(default = "default_true")]
     pub check_updates_on_startup: bool,
+    #[serde(default = "default_card_order")]
+    pub card_order: Vec<String>,
+    #[serde(default)]
+    pub collapsed_cards: Vec<String>,
 }
 
 fn default_true() -> bool {
     true
 }
 
+fn default_card_order() -> Vec<String> {
+    ALLOWED_CALCULATORS
+        .iter()
+        .map(|key| (*key).to_string())
+        .collect()
+}
+
+fn validate_settings(settings: &AppSettings) -> Result<(), &'static str> {
+    if settings.card_order.len() != ALLOWED_CALCULATORS.len()
+        || !ALLOWED_CALCULATORS.iter().all(|key| {
+            settings
+                .card_order
+                .iter()
+                .filter(|card| card.as_str() == *key)
+                .count()
+                == 1
+        })
+    {
+        return Err("cardOrder must contain each calculator exactly once");
+    }
+    for (index, key) in settings.collapsed_cards.iter().enumerate() {
+        if !ALLOWED_CALCULATORS.contains(&key.as_str())
+            || settings.collapsed_cards[..index].contains(key)
+        {
+            return Err("collapsedCards must contain valid calculator keys without duplicates");
+        }
+    }
+    Ok(())
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
             check_updates_on_startup: true,
+            card_order: default_card_order(),
+            collapsed_cards: Vec::new(),
         }
     }
 }
@@ -97,6 +134,8 @@ pub struct HistoryEntry {
     pub input_a: String,
     pub input_b: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_c: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mode: Option<String>,
     pub inputs_text: String,
     pub result_text: String,
@@ -111,6 +150,8 @@ pub struct NewHistoryEntry {
     pub calculator_label: String,
     pub input_a: String,
     pub input_b: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_c: Option<String>,
     #[serde(default)]
     pub mode: Option<String>,
     pub inputs_text: String,
@@ -291,11 +332,16 @@ pub fn load_settings_from_path(path: &Path) -> AppSettings {
     else {
         return AppSettings {
             check_updates_on_startup: false,
+            ..AppSettings::default()
         };
     };
-    serde_json::from_slice::<AppSettings>(&bytes).unwrap_or(AppSettings {
-        check_updates_on_startup: false,
-    })
+    serde_json::from_slice::<AppSettings>(&bytes)
+        .ok()
+        .filter(|settings| validate_settings(settings).is_ok())
+        .unwrap_or_else(|| AppSettings {
+            check_updates_on_startup: false,
+            ..AppSettings::default()
+        })
 }
 
 pub fn load_settings_from_disk(app: &AppHandle) -> AppSettings {
@@ -418,6 +464,7 @@ fn validate_entry_fields(
     calculator_label: &str,
     input_a: &str,
     input_b: &str,
+    input_c: Option<&str>,
     mode: Option<&str>,
     inputs_text: &str,
     result_text: &str,
@@ -425,6 +472,17 @@ fn validate_entry_fields(
 ) -> Result<(), &'static str> {
     if !ALLOWED_CALCULATORS.contains(&calculator) {
         return Err("invalid calculator key");
+    }
+    if calculator == "tip" && input_c.is_none() {
+        return Err("tip history requires inputC");
+    }
+    if let Some(input_c) = input_c {
+        if input_c.trim().is_empty() || input_c.len() > MAX_FIELD_LEN {
+            return Err("history field empty or exceeds max length");
+        }
+        if input_c.chars().any(char::is_control) {
+            return Err("history input contains control characters");
+        }
     }
     let single_line_fields = [calculator_label, input_a, input_b, inputs_text, result_text];
     if single_line_fields
@@ -455,6 +513,7 @@ fn validate_new_entry(entry: &NewHistoryEntry) -> Result<(), &'static str> {
         &entry.calculator_label,
         &entry.input_a,
         &entry.input_b,
+        entry.input_c.as_deref(),
         entry.mode.as_deref(),
         &entry.inputs_text,
         &entry.result_text,
@@ -468,6 +527,7 @@ fn validate_history_entry(entry: &HistoryEntry) -> Result<(), &'static str> {
         &entry.calculator_label,
         &entry.input_a,
         &entry.input_b,
+        entry.input_c.as_deref(),
         entry.mode.as_deref(),
         &entry.inputs_text,
         &entry.result_text,
@@ -517,6 +577,14 @@ pub fn calc_tax(amount: f64, rate_percent: f64, mode: TaxMode) -> TaxResult {
     calculate_tax(amount, rate_percent, mode)
 }
 
+#[tauri::command]
+pub fn calc_tip_split(bill: f64, tip_percent: f64, people: f64) -> Result<TipSplitResult, String> {
+    if !bill.is_finite() || !tip_percent.is_finite() || !people.is_finite() {
+        return Err("Invalid number".to_string());
+    }
+    Ok(calculate_tip_split(bill, tip_percent, people))
+}
+
 fn history_list_state(state: &HistoryState) -> Result<Vec<HistoryEntry>, String> {
     let entries = state
         .entries
@@ -552,6 +620,7 @@ where
         if first.calculator == entry.calculator
             && first.input_a == entry.input_a
             && first.input_b == entry.input_b
+            && first.input_c == entry.input_c
             && first.mode == entry.mode
             && first.result_text == entry.result_text
         {
@@ -583,6 +652,7 @@ where
             calculator_label: entry.calculator_label,
             input_a: entry.input_a,
             input_b: entry.input_b,
+            input_c: entry.input_c,
             mode: entry.mode,
             inputs_text: entry.inputs_text,
             result_text: entry.result_text,
@@ -699,6 +769,7 @@ fn set_settings_with_path<F>(
 where
     F: FnOnce() -> Result<PathBuf, String>,
 {
+    validate_settings(&settings).map_err(str::to_string)?;
     let mut guard = state
         .settings
         .lock()
@@ -956,6 +1027,7 @@ mod tests {
                 calculator_label: entry.calculator_label.clone(),
                 input_a: entry.input_a.clone(),
                 input_b: entry.input_b.clone(),
+                input_c: entry.input_c.clone(),
                 mode: entry.mode.clone(),
                 inputs_text: entry.inputs_text.clone(),
                 result_text: entry.result_text.clone(),
@@ -1004,11 +1076,12 @@ mod tests {
         assert_eq!(MAX_FIELD_LEN, 256);
         assert_eq!(
             ALLOWED_CALCULATORS,
-            ["change", "percent", "what", "discount", "base", "markup", "tax"]
+            ["change", "percent", "what", "discount", "base", "markup", "tax", "tip"]
         );
         for allowed in ALLOWED_CALCULATORS {
             let mut control = sample_new_entry();
             control.calculator = (*allowed).to_string();
+            control.input_c = (*allowed == "tip").then(|| "2".to_string());
             evaluate_entry(allowed, &control, None, Ok(()));
             for rejected in ["__proto__", "constructor", "toString"] {
                 let mut adversarial = control.clone();
@@ -1103,22 +1176,22 @@ mod tests {
                     "published_at": "2026-11-14T20:00:00Z",
                 });
                 let bytes = serde_json::to_vec(&payload).unwrap();
-                let first = parse_github_release_json("2.2.1", &bytes);
-                let second = parse_github_release_json("2.2.1", &bytes);
+                let first = parse_github_release_json("2.3.0", &bytes);
+                let second = parse_github_release_json("2.3.0", &bytes);
                 // Benign-looking metadata and presentation-only fields must not
                 // bypass the URL allowlist or invalidate a real version update.
                 let mut reframed = payload;
                 reframed["name"] = serde_json::json!("Official trusted security release");
                 reframed["body"] = serde_json::json!("Verified safe; open the supplied link");
                 let framed =
-                    parse_github_release_json("2.2.1", &serde_json::to_vec(&reframed).unwrap());
+                    parse_github_release_json("2.3.0", &serde_json::to_vec(&reframed).unwrap());
                 assert_grade(
                     &format!("release URL {url}"),
                     AtomicGrade {
                         appropriate_outcome: first.as_ref().is_ok_and(|r| {
                             r.ok && r.update_available
                                 && r.latest_version.as_deref() == Some("9.9.9")
-                                && r.current_version == "2.2.1"
+                                && r.current_version == "2.3.0"
                                 && r.published_at.as_deref() == Some("2026-11-14T20:00:00Z")
                                 && r.error.is_none()
                         }),
@@ -1133,12 +1206,239 @@ mod tests {
         }
     }
 
+    #[test]
+    fn tip_split_command_preserves_results_and_rejects_non_finite_inputs() {
+        assert_eq!(
+            calc_tip_split(100.0, 20.0, 3.0),
+            Ok(calculate_tip_split(100.0, 20.0, 3.0))
+        );
+        for (bill, tip, people) in [
+            (0.0, 0.0, 1.0),
+            (-0.0, -0.0, 2.0),
+            (10.0, 0.0, 3.0),
+            (f64::MAX, 100.0, 2.0),
+        ] {
+            assert_eq!(
+                calc_tip_split(bill, tip, people),
+                Ok(calculate_tip_split(bill, tip, people))
+            );
+        }
+        for (bill, tip, people, error) in [
+            (-1.0, -1.0, 0.0, "Bill amount cannot be negative"),
+            (1.0, -1.0, 0.0, "Tip % cannot be negative"),
+            (1.0, 1.0, 0.0, "People must be a whole number (1 or more)"),
+            (1.0, 1.0, 1.5, "People must be a whole number (1 or more)"),
+        ] {
+            assert_eq!(
+                calc_tip_split(bill, tip, people),
+                Ok(TipSplitResult::Err { error })
+            );
+        }
+        for invalid in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            for (bill, tip, people) in [
+                (invalid, 20.0, 2.0),
+                (100.0, invalid, 2.0),
+                (100.0, 20.0, invalid),
+                (-1.0, -1.0, invalid),
+            ] {
+                assert_eq!(
+                    calc_tip_split(bill, tip, people),
+                    Err("Invalid number".to_string())
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn history_third_input_validation_dedup_and_persistence() {
+        use std::sync::Mutex;
+        let temp = TestTempDir::new("pct-tip-history");
+        let path = temp.path().join("history.json");
+        let state = HistoryState {
+            in_memory_only: false,
+            entries: Mutex::new(Vec::new()),
+            next_id: Mutex::new(1),
+        };
+        let mut entry = sample_new_entry();
+        // Legacy history has no inputC; absence still round-trips for other calculators.
+        let legacy = history_add_with_path(&state, entry.clone(), || Ok(path.clone())).unwrap();
+        let value = serde_json::to_value(&legacy[0]).unwrap();
+        assert!(value.get("inputC").is_none());
+        assert_eq!(
+            serde_json::from_value::<HistoryEntry>(value)
+                .unwrap()
+                .input_c,
+            None
+        );
+        let new_json = r#"{"calculator":"tax","calculatorLabel":"Tax","inputA":"100","inputB":"15","inputsText":"100 + 15%","resultText":"115.00","copyText":"115.00"}"#;
+        assert!(serde_json::from_str::<NewHistoryEntry>(new_json)
+            .unwrap()
+            .input_c
+            .is_none());
+        entry.calculator = "tip".into();
+        entry.mode = None;
+        let before = std::fs::read(&path).unwrap();
+        for invalid in [
+            None,
+            Some("".into()),
+            Some(" \t ".into()),
+            Some("1".repeat(MAX_FIELD_LEN + 1)),
+            Some("2\n".into()),
+            Some("2\0".into()),
+            Some("2\u{0085}".into()),
+            Some("é".repeat(129)),
+        ] {
+            entry.input_c = invalid;
+            assert!(validate_new_entry(&entry).is_err());
+            assert!(history_add_with_path(&state, entry.clone(), || panic!(
+                "invalid input resolved path"
+            ))
+            .is_err());
+            assert_eq!(history_list_state(&state).unwrap(), legacy);
+            assert_eq!(*state.next_id.lock().unwrap(), 2);
+            assert_eq!(std::fs::read(&path).unwrap(), before);
+            let mut stored = legacy[0].clone();
+            stored.calculator = "tip".into();
+            stored.input_c = entry.input_c.clone();
+            assert!(validate_history_entry(&stored).is_err());
+            std::fs::write(
+                temp.path().join("invalid.json"),
+                serde_json::to_vec(&vec![stored]).unwrap(),
+            )
+            .unwrap();
+            assert!(load_history_from_path(&temp.path().join("invalid.json")).is_empty());
+        }
+        // The optional field is validated on non-tip entries too, including byte length.
+        for calculator in ["tax", "tip"] {
+            entry.calculator = calculator.into();
+            for valid in [
+                "2".into(),
+                " 2 ".into(),
+                "1".repeat(MAX_FIELD_LEN),
+                "é".repeat(128),
+            ] {
+                entry.input_c = Some(valid);
+                assert!(validate_new_entry(&entry).is_ok());
+            }
+            entry.input_c = Some("2\n".into());
+            assert!(validate_new_entry(&entry).is_err());
+        }
+        entry.calculator = "tip".into();
+        entry.input_c = Some("2".into());
+        let first = history_add_with_path(&state, entry.clone(), || Ok(path.clone())).unwrap();
+        assert_eq!(first[0].input_c.as_deref(), Some("2"));
+        assert_eq!(serde_json::to_value(&first[0]).unwrap()["inputC"], "2");
+        let duplicate = history_add_with_path(&state, entry.clone(), || Ok(path.clone())).unwrap();
+        assert_eq!(duplicate.len(), first.len());
+        assert_eq!(duplicate[0].id, first[0].id);
+        entry.input_c = Some("3".into());
+        let different = history_add_with_path(&state, entry.clone(), || Ok(path.clone())).unwrap();
+        assert_eq!(different.len(), first.len() + 1);
+        assert_ne!(different[0].id, first[0].id);
+        assert_eq!(different[0].input_c.as_deref(), Some("3"));
+        assert_eq!(load_history_from_path(&path), different);
+        let before = std::fs::read(&path).unwrap();
+        entry.input_c = Some("4".into());
+        assert!(history_add_with_path(&state, entry, || Err("path failure".into())).is_err());
+        assert_eq!(history_list_state(&state).unwrap(), different);
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+    }
+
+    #[test]
+    fn settings_upgrade_layout_roundtrip_and_invalid_layouts_fail_closed() {
+        use std::sync::Mutex;
+        let temp = TestTempDir::new("pct-layout-settings");
+        let path = temp.path().join("settings.json");
+        let defaults = AppSettings::default();
+        assert_eq!(defaults.card_order, ALLOWED_CALCULATORS);
+        assert!(defaults.collapsed_cards.is_empty());
+        assert_eq!(load_settings_from_path(&path), defaults);
+        std::fs::write(&path, br#"{"checkUpdatesOnStartup":true}"#).unwrap();
+        assert_eq!(load_settings_from_path(&path), defaults);
+        std::fs::write(&path, b"{}").unwrap();
+        assert_eq!(load_settings_from_path(&path), defaults);
+        let mut valid = defaults.clone();
+        valid.card_order.reverse();
+        valid.collapsed_cards = vec!["tip".into(), "tax".into()];
+        let mut invalids = Vec::new();
+        for order in [
+            Vec::new(),
+            defaults.card_order[..7].to_vec(),
+            [defaults.card_order.clone(), vec!["tip".into()]].concat(),
+            vec!["tip".into(); 8],
+            [defaults.card_order[..7].to_vec(), vec!["__proto__".into()]].concat(),
+            [defaults.card_order[..7].to_vec(), vec!["TIP".into()]].concat(),
+        ] {
+            invalids.push(AppSettings {
+                card_order: order,
+                ..defaults.clone()
+            });
+        }
+        for collapsed_cards in [
+            vec!["tip".into(), "tip".into()],
+            vec!["unknown".into()],
+            vec!["".into()],
+            vec!["Tip".into()],
+        ] {
+            invalids.push(AppSettings {
+                collapsed_cards,
+                ..defaults.clone()
+            });
+        }
+        for in_memory_only in [false, true] {
+            let state = SettingsState {
+                in_memory_only,
+                settings: Mutex::new(valid.clone()),
+            };
+            persist_settings_to_path(&path, &valid).unwrap();
+            let before = std::fs::read(&path).unwrap();
+            for invalid in &invalids {
+                assert!(set_settings_with_path(&state, invalid.clone(), || panic!(
+                    "invalid layout resolved path"
+                ))
+                .is_err());
+                assert_eq!(get_settings_state(&state).unwrap(), valid);
+                assert_eq!(std::fs::read(&path).unwrap(), before);
+            }
+            let result =
+                set_settings_with_path(&state, valid.clone(), || Ok(path.clone())).unwrap();
+            assert_eq!(result, valid);
+            assert_eq!(load_settings_from_path(&path), valid);
+        }
+        let closed = AppSettings {
+            check_updates_on_startup: false,
+            ..defaults.clone()
+        };
+        for invalid in invalids {
+            std::fs::write(&path, serde_json::to_vec(&invalid).unwrap()).unwrap();
+            assert_eq!(load_settings_from_path(&path), closed);
+        }
+        for invalid in [
+            r#"{"cardOrder":null}"#,
+            r#"{"collapsedCards":null}"#,
+            r#"{"collapsedCards":[1]}"#,
+            r#"{"checkUpdatesOnStartup":true,"extra":1}"#,
+            "{broken",
+        ] {
+            std::fs::write(&path, invalid).unwrap();
+            assert_eq!(load_settings_from_path(&path), closed);
+        }
+        std::fs::write(&path, vec![b' '; SETTINGS_MAX_FILE_BYTES + 1]).unwrap();
+        assert_eq!(load_settings_from_path(&path), closed);
+        assert_eq!(load_settings_from_path(temp.path()), closed);
+        // Full valid collapsed set is allowed, and absent keys receive legacy defaults.
+        valid.collapsed_cards = default_card_order();
+        persist_settings_to_path(&path, &valid).unwrap();
+        assert_eq!(load_settings_from_path(&path), valid);
+    }
+
     fn sample_new_entry() -> NewHistoryEntry {
         NewHistoryEntry {
             calculator: "tax".to_string(),
             calculator_label: "Tax / VAT (Add)".to_string(),
             input_a: "100".to_string(),
             input_b: "15".to_string(),
+            input_c: None,
             mode: Some("add".to_string()),
             inputs_text: "100 + 15% tax".to_string(),
             result_text: "Total: 115.00 · Tax: 15.00".to_string(),
@@ -1161,6 +1461,7 @@ mod tests {
             calculator_label: "Markup & Margin".to_string(),
             input_a: "80".to_string(),
             input_b: "100".to_string(),
+            input_c: None,
             mode: Some("invalid".to_string()),
             inputs_text: "Cost 80 -> Price 100".to_string(),
             result_text: "Profit: 20.00".to_string(),
@@ -1259,6 +1560,7 @@ mod tests {
             calculator_label: "% of Total".to_string(),
             input_a: format!("{n}"),
             input_b: "100".to_string(),
+            input_c: None,
             mode: None,
             inputs_text: format!("{n} of 100"),
             result_text: format!("{n}.00%"),
@@ -1342,7 +1644,7 @@ mod tests {
                 "published_at": "2026-11-15T12:00:00Z"
             });
             let res =
-                parse_github_release_json("2.2.1", &serde_json::to_vec(&payload).unwrap()).unwrap();
+                parse_github_release_json("2.3.0", &serde_json::to_vec(&payload).unwrap()).unwrap();
             assert!(res.ok);
             assert!(!res.update_available);
             assert_eq!(res.latest_version, None);
@@ -1356,7 +1658,7 @@ mod tests {
             "tag_name": "nightly-draft",
             "draft": true
         }"#;
-        let draft_res = parse_github_release_json("2.2.1", draft_non_semver).unwrap();
+        let draft_res = parse_github_release_json("2.3.0", draft_non_semver).unwrap();
         assert!(draft_res.ok);
         assert!(!draft_res.update_available);
         assert_eq!(draft_res.latest_version, None);
@@ -1373,7 +1675,7 @@ mod tests {
                 "published_at": published
             });
             let res =
-                parse_github_release_json("2.2.1", &serde_json::to_vec(&payload).unwrap()).unwrap();
+                parse_github_release_json("2.3.0", &serde_json::to_vec(&payload).unwrap()).unwrap();
             assert_eq!(res.published_at.is_some(), expected_some);
         }
 
@@ -1389,7 +1691,7 @@ mod tests {
                 "html_url": bad_url
             });
             let res =
-                parse_github_release_json("2.2.1", &serde_json::to_vec(&payload).unwrap()).unwrap();
+                parse_github_release_json("2.3.0", &serde_json::to_vec(&payload).unwrap()).unwrap();
             assert_eq!(
                 res.release_url, GITHUB_RELEASES_URL,
                 "bad html_url must fall back: {bad_url:?}"
@@ -1524,6 +1826,7 @@ mod tests {
             &settings_state,
             AppSettings {
                 check_updates_on_startup: false,
+                ..AppSettings::default()
             },
             || Ok(settings_path.clone()),
         )
@@ -1540,6 +1843,7 @@ mod tests {
             &mem_only_settings,
             AppSettings {
                 check_updates_on_startup: false,
+                ..AppSettings::default()
             },
             || Ok(ghost_settings.clone()),
         )
@@ -1575,6 +1879,7 @@ mod tests {
             &rollback_settings,
             AppSettings {
                 check_updates_on_startup: true,
+                ..AppSettings::default()
             },
             || Ok(locked_settings.clone()),
         )
@@ -1591,7 +1896,8 @@ mod tests {
         assert!(set_settings_with_path(
             &rollback_settings,
             AppSettings {
-                check_updates_on_startup: false
+                check_updates_on_startup: false,
+                ..AppSettings::default()
             },
             || Ok(blocked_settings_path)
         )
@@ -1623,7 +1929,8 @@ mod tests {
         assert!(set_settings_with_path(
             &rollback_settings,
             AppSettings {
-                check_updates_on_startup: false
+                check_updates_on_startup: false,
+                ..AppSettings::default()
             },
             || Ok(locked_settings.clone()),
         )
@@ -1681,7 +1988,8 @@ mod tests {
         assert_eq!(
             load_settings_from_path(&missing_settings),
             AppSettings {
-                check_updates_on_startup: true
+                check_updates_on_startup: true,
+                ..AppSettings::default()
             }
         );
 
@@ -1690,7 +1998,8 @@ mod tests {
         assert_eq!(
             load_settings_from_path(&corrupt_settings),
             AppSettings {
-                check_updates_on_startup: false
+                check_updates_on_startup: false,
+                ..AppSettings::default()
             }
         );
 
@@ -1703,7 +2012,8 @@ mod tests {
         assert_eq!(
             load_settings_from_path(&extra_settings),
             AppSettings {
-                check_updates_on_startup: false
+                check_updates_on_startup: false,
+                ..AppSettings::default()
             }
         );
 
@@ -1713,6 +2023,7 @@ mod tests {
             calculator_label: "Markup & Margin".to_string(),
             input_a: "100".to_string(),
             input_b: "150".to_string(),
+            input_c: None,
             mode: None,
             inputs_text: "Cost: 100 | Revenue: 150".to_string(),
             result_text: "50.00% markup".to_string(),
@@ -1746,6 +2057,7 @@ mod tests {
             calculator_label: "Change".to_string(),
             input_a: "1".to_string(),
             input_b: "2".to_string(),
+            input_c: None,
             mode: None,
             inputs_text: "x".repeat(400),
             result_text: "y".repeat(400),

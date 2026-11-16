@@ -83,6 +83,7 @@ fn main() {
             commands::calc_original,
             commands::calc_markup_margin,
             commands::calc_tax,
+            commands::calc_tip_split,
             commands::history_list,
             commands::history_add,
             commands::history_delete,

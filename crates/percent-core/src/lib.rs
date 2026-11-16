@@ -102,6 +102,34 @@ pub enum TaxResult {
     Err { error: &'static str },
 }
 
+/// Outcome of splitting a bill, including its tip, between whole people.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(tag = "ok")]
+pub enum TipSplitResult {
+    #[serde(rename = "true")]
+    Ok {
+        #[serde(rename = "tipAmount")]
+        tip_amount: f64,
+        #[serde(rename = "totalBill")]
+        total_bill: f64,
+        #[serde(rename = "perPerson")]
+        per_person: f64,
+        #[serde(rename = "tipText")]
+        tip_text: String,
+        #[serde(rename = "totalText")]
+        total_text: String,
+        #[serde(rename = "perPersonText")]
+        per_person_text: String,
+        label: String,
+        #[serde(rename = "liveResult")]
+        live_result: String,
+        #[serde(rename = "copyText")]
+        copy_text: String,
+    },
+    #[serde(rename = "false")]
+    Err { error: &'static str },
+}
+
 /// JavaScript-identical `Math.round(x)`:
 /// ties (`.5`) round toward `+∞` (`js_round(-2.5) == -2.0`), whereas Rust's
 /// `f64::round` rounds ties away from zero (`(-2.5_f64).round() == -3.0`),
@@ -384,9 +412,133 @@ pub fn calculate_tax(amount: f64, rate_percent: f64, mode: TaxMode) -> TaxResult
     }
 }
 
+/// Computes a tip and splits the total bill without rounding intermediate values.
+pub fn calculate_tip_split(bill: f64, tip_percent: f64, people: f64) -> TipSplitResult {
+    if bill < 0.0 {
+        return TipSplitResult::Err {
+            error: "Bill amount cannot be negative",
+        };
+    }
+    if tip_percent < 0.0 {
+        return TipSplitResult::Err {
+            error: "Tip % cannot be negative",
+        };
+    }
+    if !people.is_finite() || people < 1.0 || people.fract() != 0.0 {
+        return TipSplitResult::Err {
+            error: "People must be a whole number (1 or more)",
+        };
+    }
+
+    let tip_amount = bill * (tip_percent / 100.0);
+    let total_bill = bill + tip_amount;
+    let per_person = total_bill / people;
+    let tip_text = format_decimal(tip_amount);
+    let total_text = format_decimal(total_bill);
+    let per_person_text = format_decimal(per_person);
+    let label = format!("Each: {per_person_text}<br>Total: {total_text} · Tip: {tip_text}");
+    let live_result = format!("Each: {per_person_text} · Total: {total_text}");
+    let copy_text = format!("Each: {per_person_text}\nTotal: {total_text} · Tip: {tip_text}");
+
+    TipSplitResult::Ok {
+        tip_amount,
+        total_bill,
+        per_person,
+        tip_text,
+        total_text,
+        per_person_text,
+        label,
+        live_result,
+        copy_text,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tip_split_zero_tip_and_multiple_people() {
+        assert_eq!(
+            calculate_tip_split(100.0, 20.0, 3.0),
+            TipSplitResult::Ok {
+                tip_amount: 20.0,
+                total_bill: 120.0,
+                per_person: 40.0,
+                tip_text: "20.00".into(),
+                total_text: "120.00".into(),
+                per_person_text: "40.00".into(),
+                label: "Each: 40.00<br>Total: 120.00 · Tip: 20.00".into(),
+                live_result: "Each: 40.00 · Total: 120.00".into(),
+                copy_text: "Each: 40.00\nTotal: 120.00 · Tip: 20.00".into(),
+            }
+        );
+        let TipSplitResult::Ok {
+            tip_amount,
+            total_bill,
+            per_person,
+            ..
+        } = calculate_tip_split(75.0, 0.0, 1.0)
+        else {
+            panic!("valid bill rejected")
+        };
+        assert_eq!((tip_amount, total_bill, per_person), (0.0, 75.0, 75.0));
+    }
+
+    #[test]
+    fn tip_split_domain_guards() {
+        assert_eq!(
+            calculate_tip_split(-1.0, -1.0, 0.0),
+            TipSplitResult::Err {
+                error: "Bill amount cannot be negative",
+            }
+        );
+        assert_eq!(
+            calculate_tip_split(1.0, -1.0, 0.0),
+            TipSplitResult::Err {
+                error: "Tip % cannot be negative",
+            }
+        );
+        for people in [
+            0.0,
+            -0.0,
+            -1.0,
+            0.5,
+            1.5,
+            f64::NAN,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+        ] {
+            assert_eq!(
+                calculate_tip_split(100.0, 15.0, people),
+                TipSplitResult::Err {
+                    error: "People must be a whole number (1 or more)",
+                },
+                "people={people:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn tip_split_normalizes_signed_zero_and_rounds_only_outputs() {
+        for (bill, tip, people, texts) in [
+            (-0.0, -0.0, 2.0, ["0.00", "0.00", "0.00"]),
+            (0.05, 50.0, 3.0, ["0.03", "0.08", "0.03"]),
+            (1.005, 0.0, 1.0, ["0.00", "1.00", "1.00"]),
+            (10.0, 0.0, 3.0, ["0.00", "10.00", "3.33"]),
+        ] {
+            let TipSplitResult::Ok {
+                tip_text,
+                total_text,
+                per_person_text,
+                ..
+            } = calculate_tip_split(bill, tip, people)
+            else {
+                panic!("valid bill rejected")
+            };
+            assert_eq!([tip_text, total_text, per_person_text], texts);
+        }
+    }
 
     // --- Direct port of tests/calculations.test.js (Vitest) ---
 

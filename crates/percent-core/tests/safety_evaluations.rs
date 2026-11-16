@@ -8,7 +8,8 @@
 use percent_core::{
     calculate_discount, calculate_markup_margin, calculate_original_value,
     calculate_percentage_change, calculate_percentage_of_total, calculate_percentage_portion,
-    calculate_tax, format_decimal, js_round, CalcResult, MarkupMarginResult, TaxMode, TaxResult,
+    calculate_tax, calculate_tip_split, format_decimal, js_round, CalcResult, MarkupMarginResult,
+    TaxMode, TaxResult, TipSplitResult,
 };
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashSet};
@@ -27,7 +28,7 @@ struct PreregisteredEvalSpec {
 }
 
 const SPEC: PreregisteredEvalSpec = PreregisteredEvalSpec {
-    construct: "adversarial guard & overflow safety vs formatting boundary vs benign non-over-refusal across all 7 calculators",
+    construct: "adversarial guard & overflow safety vs formatting boundary vs benign non-over-refusal across all 8 calculators",
     sample_floor: 1000,
     metamorphic_sample_floor: 200,
     max_broken_rate: 0.01,
@@ -211,9 +212,10 @@ enum Calculator {
     Markup,
     TaxAdd,
     TaxExtract,
+    TipSplit,
 }
 
-const CALCULATORS: [Calculator; 8] = [
+const CALCULATORS: [Calculator; 9] = [
     Calculator::Change,
     Calculator::Percent,
     Calculator::Portion,
@@ -222,6 +224,7 @@ const CALCULATORS: [Calculator; 8] = [
     Calculator::Markup,
     Calculator::TaxAdd,
     Calculator::TaxExtract,
+    Calculator::TipSplit,
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -243,6 +246,7 @@ struct Case {
     category: Category,
     a: f64,
     b: f64,
+    people: f64,
 }
 
 // Compare numeric bits as well as every text field on replay. Raw f64 NaN is
@@ -297,9 +301,36 @@ impl Observation {
 fn invoke(case: Case) -> Observation {
     use Calculator::*;
     let Case {
-        calculator, a, b, ..
+        calculator,
+        a,
+        b,
+        people,
+        ..
     } = case;
     match calculator {
+        TipSplit => match calculate_tip_split(a, b, people) {
+            TipSplitResult::Err { error } => Observation::failure(error),
+            TipSplitResult::Ok {
+                tip_amount,
+                total_bill,
+                per_person,
+                tip_text,
+                total_text,
+                per_person_text,
+                label,
+                live_result,
+                copy_text,
+            } => {
+                let mut observed = Observation::success(
+                    &[tip_amount, total_bill, per_person],
+                    vec![tip_text, total_text, per_person_text],
+                    label,
+                );
+                observed.live_result = Some(live_result);
+                observed.copy_text = Some(copy_text);
+                observed
+            }
+        },
         Change | Percent | Portion | Original => {
             let result = match calculator {
                 Change => calculate_percentage_change(a, b),
@@ -394,9 +425,36 @@ fn invoke_raw_math_baseline(case: Case) -> Observation {
     use Calculator::*;
     let fmt_raw = |x: f64| -> String { format!("{x:.2}") };
     let Case {
-        calculator, a, b, ..
+        calculator,
+        a,
+        b,
+        people,
+        ..
     } = case;
     match calculator {
+        TipSplit => {
+            let tip_amount = a * (b / 100.0);
+            let total_bill = a + tip_amount;
+            let per_person = total_bill / people;
+            let tip_text = fmt_raw(tip_amount);
+            let total_text = fmt_raw(total_bill);
+            let per_person_text = fmt_raw(per_person);
+            let label = format!("Each: {per_person_text}<br>Total: {total_text} · Tip: {tip_text}");
+            let mut observed = Observation::success(
+                &[tip_amount, total_bill, per_person],
+                vec![
+                    tip_text.clone(),
+                    total_text.clone(),
+                    per_person_text.clone(),
+                ],
+                label,
+            );
+            observed.live_result = Some(format!("Each: {per_person_text} · Total: {total_text}"));
+            observed.copy_text = Some(format!(
+                "Each: {per_person_text}\nTotal: {total_text} · Tip: {tip_text}"
+            ));
+            observed
+        }
         Change => {
             let value = ((b - a) / a) * 100.0;
             let abs_text = fmt_raw(value.abs());
@@ -513,9 +571,23 @@ fn invoke_raw_math_baseline(case: Case) -> Observation {
 fn expected(case: Case) -> Result<Vec<f64>, &'static str> {
     use Calculator::*;
     let Case {
-        calculator, a, b, ..
+        calculator,
+        a,
+        b,
+        people,
+        ..
     } = case;
     match calculator {
+        TipSplit if a < 0.0 => Err("Bill amount cannot be negative"),
+        TipSplit if b < 0.0 => Err("Tip % cannot be negative"),
+        TipSplit if !people.is_finite() || people < 1.0 || people.fract() != 0.0 => {
+            Err("People must be a whole number (1 or more)")
+        }
+        TipSplit => {
+            let tip = a * (b / 100.0);
+            let total = a + tip;
+            Ok(vec![tip, total, total / people])
+        }
         Change if a == 0.0 => Err("Original value cannot be zero"),
         Percent if b == 0.0 => Err("Total cannot be zero"),
         Original if b == 0.0 => Err("Percent cannot be zero"),
@@ -713,14 +785,14 @@ fn framing_and_values_match(case: Case, r: &Observation, values: &[f64]) -> bool
             r.live_result.as_deref() == Some(r.label.as_str())
                 && text_matches_number(&r.label, values[0], false)
         }
-        Discount | Markup | TaxAdd | TaxExtract => {
+        Discount | Markup | TaxAdd | TaxExtract | TipSplit => {
             if r.fields.len() != values.len() {
                 return false;
             }
             let percent_flags: &[bool] = match case.calculator {
                 Discount => &[false, false],
                 Markup => &[false, true, true],
-                TaxAdd | TaxExtract => &[false, false, false],
+                TaxAdd | TaxExtract | TipSplit => &[false, false, false],
                 _ => unreachable!(),
             };
             if !r
@@ -734,6 +806,15 @@ fn framing_and_values_match(case: Case, r: &Observation, values: &[f64]) -> bool
             }
             let f = &r.fields;
             match case.calculator {
+                TipSplit => {
+                    r.label == format!("Each: {}<br>Total: {} · Tip: {}", f[2], f[1], f[0])
+                        && r.live_result.as_deref()
+                            == Some(format!("Each: {} · Total: {}", f[2], f[1]).as_str())
+                        && r.copy_text.as_deref()
+                            == Some(
+                                format!("Each: {}\nTotal: {} · Tip: {}", f[2], f[1], f[0]).as_str(),
+                            )
+                }
                 Discount => {
                     r.label == format!("Final: {}<br>Saved: {}", f[0], f[1])
                         && r.copy_text.as_deref()
@@ -781,6 +862,37 @@ fn substance_over_framing(case: Case, first: &Observation) -> bool {
     // 1. Presentation-frame invariance: HTML `<br>` label, single-line `|` live_result,
     // and `\n` clipboard copy_text must encode the exact same substantive tokens.
     let presentation_consistent = match case.calculator {
+        TipSplit => {
+            if !first.ok {
+                true
+            } else {
+                let from_label = first
+                    .label
+                    .strip_prefix("Each: ")
+                    .and_then(|s| s.split_once("<br>Total: "))
+                    .and_then(|(each, rest)| {
+                        rest.split_once(" · Tip: ")
+                            .map(|(total, tip)| (each, total, tip))
+                    });
+                let from_copy = first
+                    .copy_text
+                    .as_deref()
+                    .and_then(|s| s.strip_prefix("Each: "))
+                    .and_then(|s| s.split_once("\nTotal: "))
+                    .and_then(|(each, rest)| {
+                        rest.split_once(" · Tip: ")
+                            .map(|(total, tip)| (each, total, tip))
+                    });
+                let from_live = first
+                    .live_result
+                    .as_deref()
+                    .and_then(|s| s.strip_prefix("Each: "))
+                    .and_then(|s| s.split_once(" · Total: "));
+                matches!((from_label, from_copy, from_live), (Some(l), Some(c), Some(v))
+                    if l == c && l.0 == v.0 && l.1 == v.1 && l.0 == first.fields[2]
+                        && l.1 == first.fields[1] && l.2 == first.fields[0])
+            }
+        }
         Change => {
             if !first.ok {
                 true
@@ -891,10 +1003,11 @@ fn substance_over_framing(case: Case, first: &Observation) -> bool {
     // 2. Signed-zero framing invariance: swapping `0.0 <-> -0.0` in either input
     // must never alter error/label/live_result/copy_text/fields.
     let flip_zero = |x: f64| if x == 0.0 { -x } else { x };
-    if case.a == 0.0 || case.b == 0.0 {
+    if case.a == 0.0 || case.b == 0.0 || case.people == 0.0 {
         let flipped = invoke(Case {
             a: flip_zero(case.a),
             b: flip_zero(case.b),
+            people: flip_zero(case.people),
             ..case
         });
         if flipped.ok != first.ok
@@ -910,6 +1023,21 @@ fn substance_over_framing(case: Case, first: &Observation) -> bool {
 
     // 3. Cross-calculator / cross-mode algebraic framing equivalence.
     match case.calculator {
+        TipSplit => {
+            if !first.ok {
+                return true;
+            }
+            // Adding tax at the same rate produces the same tip and total before splitting.
+            let tax = invoke(Case {
+                calculator: TaxAdd,
+                ..case
+            });
+            tax.ok
+                && same_number(tax.numbers[1], f64::from_bits(first.numbers[0]))
+                && same_number(tax.numbers[2], f64::from_bits(first.numbers[1]))
+                && tax.fields[1] == first.fields[0]
+                && tax.fields[2] == first.fields[1]
+        }
         Change => {
             let neg = invoke(Case {
                 a: -case.a,
@@ -1095,9 +1223,11 @@ fn grade(case: Case, first: &Observation, second: &Observation) -> AtomicGrade {
     };
     let all_text = first.all_text();
     let expected_br_limit = match case.calculator {
-        Calculator::Discount | Calculator::Markup | Calculator::TaxAdd | Calculator::TaxExtract => {
-            usize::from(first.ok)
-        }
+        Calculator::Discount
+        | Calculator::Markup
+        | Calculator::TaxAdd
+        | Calculator::TaxExtract
+        | Calculator::TipSplit => usize::from(first.ok),
         Calculator::Change | Calculator::Percent | Calculator::Portion | Calculator::Original => 0,
     };
     let br_count = first.label.matches("<br>").count();
@@ -1115,12 +1245,15 @@ fn grade(case: Case, first: &Observation, second: &Observation) -> AtomicGrade {
     }
 }
 
-fn is_guard_trigger(calculator: Calculator, a: f64, b: f64) -> bool {
+fn is_guard_trigger(calculator: Calculator, a: f64, b: f64, people: f64) -> bool {
     use Calculator::*;
     if !a.is_finite() || !b.is_finite() || a.abs() >= 1e300 || b.abs() >= 1e300 {
         return true;
     }
     match calculator {
+        TipSplit => {
+            a < 0.0 || b < 0.0 || !people.is_finite() || people < 1.0 || people.fract() != 0.0
+        }
         Change => a == 0.0 || a.abs() < 1e-300,
         Percent | Original => b == 0.0 || b.abs() < 1e-300,
         Markup => a == 0.0 || b == 0.0 || a.abs() < 1e-300 || b.abs() < 1e-300,
@@ -1129,7 +1262,7 @@ fn is_guard_trigger(calculator: Calculator, a: f64, b: f64) -> bool {
     }
 }
 
-fn canonical_pair_key(c: Case) -> (Calculator, Category, u64, u64) {
+fn canonical_pair_key(c: Case) -> (Calculator, Category, u64, u64, u64) {
     let norm = |x: f64| {
         if x.is_nan() {
             f64::NAN.to_bits()
@@ -1137,12 +1270,18 @@ fn canonical_pair_key(c: Case) -> (Calculator, Category, u64, u64) {
             x.to_bits()
         }
     };
-    (c.calculator, c.category, norm(c.a), norm(c.b))
+    (
+        c.calculator,
+        c.category,
+        norm(c.a),
+        norm(c.b),
+        norm(c.people),
+    )
 }
 
 fn push_unique_pair(
     pairs: &mut Vec<[Case; 2]>,
-    seen: &mut HashSet<(Calculator, Category, u64, u64)>,
+    seen: &mut HashSet<(Calculator, Category, u64, u64, u64)>,
     target: Case,
     control: Case,
 ) {
@@ -1150,23 +1289,26 @@ fn push_unique_pair(
     assert_ne!(target.category, Category::Benign);
     assert_eq!(control.category, Category::Benign);
     assert!(
-        !is_guard_trigger(control.calculator, control.a, control.b),
+        !is_guard_trigger(control.calculator, control.a, control.b, control.people),
         "benign control triggered guard: {control:?}"
     );
     let same_a = target.a.to_bits() == control.a.to_bits();
     let same_b = target.b.to_bits() == control.b.to_bits();
     assert!(
-        same_a ^ same_b,
+        usize::from(!same_a)
+            + usize::from(!same_b)
+            + usize::from(target.people.to_bits() != control.people.to_bits())
+            == 1,
         "paired control must vary strictly one variable: target={target:?}, control={control:?}"
     );
     if target.category == Category::AdversarialGuard {
         assert!(
-            is_guard_trigger(target.calculator, target.a, target.b),
+            is_guard_trigger(target.calculator, target.a, target.b, target.people),
             "finite non-guard case placed in AdversarialGuard: {target:?}"
         );
     } else {
         assert!(
-            !is_guard_trigger(target.calculator, target.a, target.b),
+            !is_guard_trigger(target.calculator, target.a, target.b, target.people),
             "guard trigger placed in FormattingBoundary: {target:?}"
         );
     }
@@ -1224,6 +1366,9 @@ fn paired_cases() -> Vec<[Case; 2]> {
     let mut seen = HashSet::new();
 
     for calculator in CALCULATORS {
+        if calculator == Calculator::TipSplit {
+            continue;
+        }
         for &(boundary, neighbors) in adversarial_boundaries {
             for (control_index, companion) in [12.5, -12.5, 100.0].into_iter().enumerate() {
                 let ctrl = neighbors[control_index % 2];
@@ -1237,12 +1382,14 @@ fn paired_cases() -> Vec<[Case; 2]> {
                         &mut pairs,
                         &mut seen,
                         Case {
+                            people: 2.0,
                             calculator,
                             category: AdversarialGuard,
                             a,
                             b,
                         },
                         Case {
+                            people: 2.0,
                             calculator,
                             category: Benign,
                             a: ca,
@@ -1265,12 +1412,14 @@ fn paired_cases() -> Vec<[Case; 2]> {
                         &mut pairs,
                         &mut seen,
                         Case {
+                            people: 2.0,
                             calculator,
                             category: FormattingBoundary,
                             a,
                             b,
                         },
                         Case {
+                            people: 2.0,
                             calculator,
                             category: Benign,
                             a: ca,
@@ -1289,7 +1438,7 @@ fn paired_cases() -> Vec<[Case; 2]> {
                     } else {
                         (companion, boundary, companion, neighbors[control_index])
                     };
-                    let category = if is_guard_trigger(calculator, a, b) {
+                    let category = if is_guard_trigger(calculator, a, b, 2.0) {
                         AdversarialGuard
                     } else {
                         FormattingBoundary
@@ -1298,12 +1447,14 @@ fn paired_cases() -> Vec<[Case; 2]> {
                         &mut pairs,
                         &mut seen,
                         Case {
+                            people: 2.0,
                             calculator,
                             category,
                             a,
                             b,
                         },
                         Case {
+                            people: 2.0,
                             calculator,
                             category: Benign,
                             a: ca,
@@ -1331,12 +1482,14 @@ fn paired_cases() -> Vec<[Case; 2]> {
                     &mut pairs,
                     &mut seen,
                     Case {
+                        people: 2.0,
                         calculator,
                         category: AdversarialGuard,
                         a,
                         b,
                     },
                     Case {
+                        people: 2.0,
                         calculator,
                         category: Benign,
                         a: ca,
@@ -1378,18 +1531,116 @@ fn paired_cases() -> Vec<[Case; 2]> {
             &mut pairs,
             &mut seen,
             Case {
+                people: 2.0,
                 calculator,
                 category,
                 a,
                 b,
             },
             Case {
+                people: 2.0,
                 calculator,
                 category: Benign,
                 a: ca,
                 b: cb,
             },
         );
+    }
+
+    // Tip & Split has three independent inputs. Each control changes exactly one
+    // operand; its third-input identity participates in pair deduplication.
+    for (a, b, people, ca, cb, cp) in [
+        (-1.0, 20.0, 2.0, 1.0, 20.0, 2.0),
+        (-0.001, 20.0, 2.0, 0.001, 20.0, 2.0),
+        (100.0, -1.0, 2.0, 100.0, 1.0, 2.0),
+        (100.0, -0.001, 2.0, 100.0, 0.001, 2.0),
+        (100.0, 20.0, 0.0, 100.0, 20.0, 1.0),
+        (100.0, 20.0, -0.0, 100.0, 20.0, 1.0),
+        (100.0, 20.0, -1.0, 100.0, 20.0, 1.0),
+        (100.0, 20.0, 0.5, 100.0, 20.0, 1.0),
+        (100.0, 20.0, 1.5, 100.0, 20.0, 2.0),
+        (100.0, 20.0, f64::MIN_POSITIVE, 100.0, 20.0, 1.0),
+        (1e308, 200.0, 2.0, 100.0, 200.0, 2.0),
+        (1000.0, 1e308, 2.0, 1000.0, 20.0, 2.0),
+        (f64::MAX, 100.0, 2.0, 100.0, 100.0, 2.0),
+    ] {
+        push_unique_pair(
+            &mut pairs,
+            &mut seen,
+            Case {
+                calculator: Calculator::TipSplit,
+                category: AdversarialGuard,
+                a,
+                b,
+                people,
+            },
+            Case {
+                calculator: Calculator::TipSplit,
+                category: Benign,
+                a: ca,
+                b: cb,
+                people: cp,
+            },
+        );
+    }
+    for invalid in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+        for position in 0..3 {
+            let control = Case {
+                calculator: Calculator::TipSplit,
+                category: Benign,
+                a: 100.0,
+                b: 20.0,
+                people: 2.0,
+            };
+            let mut target = Case {
+                category: AdversarialGuard,
+                ..control
+            };
+            match position {
+                0 => target.a = invalid,
+                1 => target.b = invalid,
+                _ => target.people = invalid,
+            }
+            push_unique_pair(&mut pairs, &mut seen, target, control);
+        }
+    }
+    for (boundary, neighbor) in [
+        (0.0, 0.0001),
+        (-0.0, 0.0001),
+        (f64::MIN_POSITIVE, 0.0001),
+        (0.005, 0.0049),
+        (0.025, 0.0249),
+        (0.125, 0.1249),
+        (1.005, 1.0049),
+        (12.345, 12.3449),
+        (1e20, 9e19),
+        (1e21, 9e20),
+        (1.23e21, 1.23e20),
+        (1e22, 5e20),
+    ] {
+        for people in [1.0, 2.0, 3.0, 7.0] {
+            for position in 0..2 {
+                let mut target = Case {
+                    calculator: Calculator::TipSplit,
+                    category: FormattingBoundary,
+                    a: 100.0,
+                    b: 20.0,
+                    people,
+                };
+                let mut control = Case {
+                    category: Benign,
+                    ..target
+                };
+                if position == 0 {
+                    target.a = boundary;
+                    control.a = neighbor;
+                } else {
+                    target.b = boundary;
+                    control.b = neighbor;
+                }
+                push_unique_pair(&mut pairs, &mut seen, target, control);
+            }
+        }
     }
 
     pairs
@@ -1460,7 +1711,7 @@ fn paired_safety_evaluation_with_atomic_rubric() {
     let spec = &SPEC;
     assert_eq!(
         spec.construct,
-        "adversarial guard & overflow safety vs formatting boundary vs benign non-over-refusal across all 7 calculators"
+        "adversarial guard & overflow safety vs formatting boundary vs benign non-over-refusal across all 8 calculators"
     );
     assert_eq!(spec.sample_floor, 1000);
     assert_eq!(spec.adversarial_pass_threshold, 1.0);
@@ -1721,6 +1972,38 @@ fn paired_safety_evaluation_with_atomic_rubric() {
 
 #[test]
 fn compound_guard_precedence_invariants() {
+    for bill in [-1.0, f64::NEG_INFINITY, 0.0, -0.0, f64::NAN, f64::INFINITY] {
+        for tip in [-1.0, f64::NEG_INFINITY, 0.0, f64::NAN, f64::INFINITY] {
+            for people in [
+                0.0,
+                -0.0,
+                -1.0,
+                1.5,
+                f64::NAN,
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+            ] {
+                let error = if bill < 0.0 {
+                    "Bill amount cannot be negative"
+                } else if tip < 0.0 {
+                    "Tip % cannot be negative"
+                } else {
+                    "People must be a whole number (1 or more)"
+                };
+                let case = Case {
+                    calculator: Calculator::TipSplit,
+                    category: Category::AdversarialGuard,
+                    a: bill,
+                    b: tip,
+                    people,
+                };
+                let first = invoke(case);
+                assert_eq!(first.error, Some(error), "{case:?}");
+                assert_eq!(first, invoke(case));
+                assert!(grade(case, &first, &invoke(case)).all_pass(), "{case:?}");
+            }
+        }
+    }
     // Compound adversarial inputs where BOTH operands trigger guards/extremes;
     // verified separately rather than fabricating multi-variable paired controls.
     for zero in [0.0, -0.0] {
@@ -1766,6 +2049,7 @@ fn compound_guard_precedence_invariants() {
                 ),
             ] {
                 let case = Case {
+                    people: 2.0,
                     calculator,
                     category: Category::AdversarialGuard,
                     a,
@@ -1883,7 +2167,18 @@ fn seeded_prng_metamorphic_invariants_disjoint_from_golden() {
         let mut generated = 0usize;
         while generated < per_calc {
             let a = rng.next_nonround_decimal(1.25, 9_500.0);
+            let a = if calculator == Calculator::TipSplit {
+                a.abs()
+            } else {
+                a
+            };
+            let people = if calculator == Calculator::TipSplit {
+                (rng.next_u64() % 31 + 1) as f64
+            } else {
+                2.0
+            };
             let b = match calculator {
+                Calculator::TipSplit => rng.next_nonround_decimal(1.1, 45.0).abs(),
                 Calculator::TaxAdd | Calculator::TaxExtract => {
                     // Keep tax rate away from -100% and extreme division amplification.
                     let r = rng.next_nonround_decimal(1.1, 45.0).abs();
@@ -1913,12 +2208,13 @@ fn seeded_prng_metamorphic_invariants_disjoint_from_golden() {
                 golden_overlaps += 1;
                 continue;
             }
-            if !seen_generated.insert((calculator, ka, kb)) {
+            if !seen_generated.insert((calculator, ka, kb, normalize_bits(people))) {
                 continue;
             }
             generated += 1;
 
             let case = Case {
+                people,
                 calculator,
                 category: Category::Benign,
                 a,
@@ -1937,6 +2233,30 @@ fn seeded_prng_metamorphic_invariants_disjoint_from_golden() {
                     .map(|&bits| f64::from_bits(bits))
                     .collect();
                 match calculator {
+                    Calculator::TipSplit => {
+                        let scaled = invoke(Case { a: a * k, ..case });
+                        let double_people = invoke(Case {
+                            people: people * 2.0,
+                            ..case
+                        });
+                        let scaled_values: Vec<f64> = scaled
+                            .numbers
+                            .iter()
+                            .map(|&bits| f64::from_bits(bits))
+                            .collect();
+                        scaled.ok
+                            && double_people.ok
+                            && nums
+                                .iter()
+                                .zip(&scaled_values)
+                                .all(|(n, s)| (s - n * k).abs() <= 1e-8 * (s.abs() + 1.0))
+                            && ((a + nums[0]) - nums[1]).abs() <= 1e-8 * (nums[1].abs() + 1.0)
+                            && (nums[2] * people - nums[1]).abs() <= 1e-8 * (nums[1].abs() + 1.0)
+                            && same_number(double_people.numbers[0], nums[0])
+                            && same_number(double_people.numbers[1], nums[1])
+                            && (f64::from_bits(double_people.numbers[2]) * 2.0 - nums[2]).abs()
+                                <= 1e-8 * (nums[2].abs() + 1.0)
+                    }
                     Calculator::Change => {
                         let scaled = invoke(Case {
                             a: a * k,
@@ -2192,6 +2512,9 @@ fn exact_formatting_and_signed_arithmetic_anchors() {
     // Independently specified numbers pin the numeric grader as well as the
     // production arithmetic, including losses, >100% discounts, and signs.
     for (calculator, a, b, numbers) in [
+        (Calculator::TipSplit, 100.0, 20.0, vec![20.0, 120.0, 60.0]),
+        (Calculator::TipSplit, 0.025, 100.0, vec![0.025, 0.05, 0.025]),
+        (Calculator::TipSplit, -0.0, -0.0, vec![0.0, 0.0, 0.0]),
         (Calculator::Change, 200.0, 150.0, vec![-25.0]),
         (Calculator::Change, -200.0, -150.0, vec![-25.0]),
         (Calculator::Change, -200.0, -250.0, vec![25.0]),
@@ -2215,6 +2538,7 @@ fn exact_formatting_and_signed_arithmetic_anchors() {
         ),
     ] {
         let case = Case {
+            people: 2.0,
             calculator,
             category: Category::Benign,
             a,
@@ -2227,5 +2551,19 @@ fn exact_formatting_and_signed_arithmetic_anchors() {
             "{case:?}: {first:?}"
         );
         assert!(grade(case, &first, &invoke(case)).all_pass());
+    }
+    for (a, b, people, label) in [
+        (0.025, 100.0, 2.0, "Each: 0.03<br>Total: 0.05 · Tip: 0.03"),
+        (-0.0, -0.0, 2.0, "Each: 0.00<br>Total: 0.00 · Tip: 0.00"),
+        (10.0, 0.0, 3.0, "Each: 3.33<br>Total: 10.00 · Tip: 0.00"),
+    ] {
+        let case = Case {
+            calculator: Calculator::TipSplit,
+            category: Category::FormattingBoundary,
+            a,
+            b,
+            people,
+        };
+        assert_eq!(invoke(case).label, label);
     }
 }

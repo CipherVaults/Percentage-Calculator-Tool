@@ -10,7 +10,7 @@ use std::io::{self, BufRead, BufWriter, Write};
 use percent_core::{
     calculate_discount, calculate_markup_margin, calculate_original_value,
     calculate_percentage_change, calculate_percentage_of_total, calculate_percentage_portion,
-    calculate_tax, format_decimal, TaxMode,
+    calculate_tax, calculate_tip_split, format_decimal, TaxMode,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -25,6 +25,12 @@ struct BridgeRequest {
     a: Value,
     #[serde(default)]
     b: Value,
+    #[serde(default)]
+    c: Value,
+    #[serde(default)]
+    people: Value,
+    #[serde(default)]
+    args: Option<Vec<Value>>,
     #[serde(default)]
     mode: Value,
 }
@@ -111,6 +117,27 @@ fn execute_op(req: &BridgeRequest) -> Result<Value, String> {
     } else {
         parse_bridge_f64
     };
+
+    if matches!(req.op.as_str(), "tip_split" | "calc_tip_split") {
+        let (a, b, c) = match req.args.as_deref() {
+            Some([a, b, c]) => (a, b, c),
+            _ => (
+                &req.a,
+                &req.b,
+                if !req.c.is_null() {
+                    &req.c
+                } else {
+                    &req.people
+                },
+            ),
+        };
+        return serde_json::to_value(calculate_tip_split(
+            parse_arg(a, "a")?,
+            parse_arg(b, "b")?,
+            parse_arg(c, "people")?,
+        ))
+        .map_err(|err| format!("serialization error: {err}"));
+    }
 
     let a = parse_arg(&req.a, "a")?;
     if req.op == "format_decimal" {
@@ -235,6 +262,84 @@ fn main() -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tip_split_bridge_argument_forms_and_surfaces() {
+        for surface in ["core", "ipc"] {
+            for op in ["tip_split", "calc_tip_split"] {
+                for fields in [
+                    r#""args":[100,20,3],"a":-1,"b":-1,"c":0"#,
+                    r#""a":100,"b":20,"c":3,"people":0"#,
+                    r#""a":100,"b":20,"c":null,"people":3"#,
+                    r#""a":100,"b":20,"people":3,"args":[1,2]"#,
+                ] {
+                    let response = process_line(&format!(
+                        r#"{{"id":"tip","surface":"{surface}","op":"{op}",{fields}}}"#
+                    ));
+                    assert!(response.ok, "{response:?}");
+                    assert_eq!(response.id, "tip");
+                    let result = response.result.unwrap();
+                    assert_eq!(result["ok"], "true");
+                    assert_eq!(result["tipAmount"], 20.0);
+                    assert_eq!(result["totalBill"], 120.0);
+                    assert_eq!(result["perPerson"], 40.0);
+                    assert_eq!(
+                        result["copyText"],
+                        "Each: 40.00\nTotal: 120.00 · Tip: 20.00"
+                    );
+                }
+                let missing = process_line(&format!(
+                    r#"{{"surface":"{surface}","op":"{op}","a":100,"b":20}}"#
+                ));
+                assert!(!missing.ok);
+                for people in ["0", "-1", "1.5"] {
+                    let response = process_line(&format!(
+                        r#"{{"surface":"{surface}","op":"{op}","args":[100,20,{people}]}}"#
+                    ));
+                    assert!(response.ok);
+                    assert_eq!(
+                        response.result.unwrap()["error"],
+                        "People must be a whole number (1 or more)"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn tip_split_bridge_non_finite_core_and_ipc_boundaries() {
+        for invalid in ["NaN", "Infinity", "-Infinity"] {
+            for position in 0..3 {
+                let mut args = serde_json::json!([100, 20, 2]);
+                args[position] = Value::String(invalid.into());
+                for surface in ["core", "ipc"] {
+                    let response = process_line(
+                        &serde_json::json!({
+                            "surface": surface, "op": "tip_split", "args": args,
+                        })
+                        .to_string(),
+                    );
+                    if surface == "ipc" {
+                        assert!(!response.ok);
+                        assert!(response.error.unwrap().contains("finite"));
+                    } else {
+                        assert!(response.ok);
+                        let result = response.result.unwrap();
+                        assert_eq!(
+                            result["ok"],
+                            if position == 2 || invalid == "-Infinity" {
+                                "false"
+                            } else {
+                                "true"
+                            }
+                        );
+                    }
+                }
+            }
+        }
+        let response = process_line(r#"{"surface":"core","op":"tip_split","args":["-0","-0",1]}"#);
+        assert_eq!(response.result.unwrap()["perPersonText"], "0.00");
+    }
 
     #[test]
     fn bridge_preserves_negative_zero_and_non_finite_core() {

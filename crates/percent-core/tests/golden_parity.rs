@@ -8,7 +8,8 @@
 use percent_core::{
     calculate_discount, calculate_markup_margin, calculate_original_value,
     calculate_percentage_change, calculate_percentage_of_total, calculate_percentage_portion,
-    calculate_tax, format_decimal, CalcResult, MarkupMarginResult, TaxMode, TaxResult,
+    calculate_tax, calculate_tip_split, format_decimal, CalcResult, MarkupMarginResult, TaxMode,
+    TaxResult, TipSplitResult,
 };
 use serde::Deserialize;
 
@@ -32,6 +33,167 @@ fn parse_js_num(s: &str) -> f64 {
 
 fn same_js_number(actual: f64, expected: f64) -> bool {
     (actual.is_nan() && expected.is_nan()) || actual == expected
+}
+
+#[test]
+fn tip_split_parity_vectors_and_stability() {
+    // Independent anchors extend parity without changing the preserved v1.1 oracle.
+    for (bill, tip, people, numbers, texts) in [
+        (
+            100.0,
+            20.0,
+            3.0,
+            [20.0, 120.0, 40.0],
+            ["20.00", "120.00", "40.00"],
+        ),
+        (
+            75.0,
+            0.0,
+            1.0,
+            [0.0, 75.0, 75.0],
+            ["0.00", "75.00", "75.00"],
+        ),
+        (
+            10.0,
+            0.0,
+            3.0,
+            [0.0, 10.0, 10.0 / 3.0],
+            ["0.00", "10.00", "3.33"],
+        ),
+        (
+            0.025,
+            100.0,
+            2.0,
+            [0.025, 0.05, 0.025],
+            ["0.03", "0.05", "0.03"],
+        ),
+        (0.0, 500.0, 4.0, [0.0, 0.0, 0.0], ["0.00", "0.00", "0.00"]),
+        (-0.0, -0.0, 2.0, [0.0, 0.0, 0.0], ["0.00", "0.00", "0.00"]),
+        (
+            1e21,
+            0.0,
+            1.0,
+            [0.0, 1e21, 1e21],
+            [
+                "0.00",
+                "999999999999999868928.00",
+                "999999999999999868928.00",
+            ],
+        ),
+        (
+            1.5e21,
+            0.0,
+            1.0,
+            [0.0, 1.5e21, 1.5e21],
+            ["0.00", "1.5e+21", "1.5e+21"],
+        ),
+        (
+            f64::MAX,
+            100.0,
+            2.0,
+            [f64::MAX, f64::INFINITY, f64::INFINITY],
+            ["Infinity", "Infinity", "Infinity"],
+        ),
+        (f64::NAN, 20.0, 2.0, [f64::NAN; 3], ["?", "?", "?"]),
+        (0.0, f64::INFINITY, 2.0, [f64::NAN; 3], ["?", "?", "?"]),
+    ] {
+        let first = calculate_tip_split(bill, tip, people);
+        let second = calculate_tip_split(bill, tip, people);
+        assert_eq!(format!("{first:?}"), format!("{second:?}"));
+        let TipSplitResult::Ok {
+            tip_amount,
+            total_bill,
+            per_person,
+            tip_text,
+            total_text,
+            per_person_text,
+            label,
+            live_result,
+            copy_text,
+        } = &first
+        else {
+            panic!("unexpected error: {first:?}")
+        };
+        for (actual, want) in [*tip_amount, *total_bill, *per_person]
+            .into_iter()
+            .zip(numbers)
+        {
+            assert!(
+                same_js_number(actual, want),
+                "({bill}, {tip}, {people}): {actual} != {want}"
+            );
+        }
+        let [tip, total, each] = texts;
+        assert_eq!(
+            [
+                tip_text.as_str(),
+                total_text.as_str(),
+                per_person_text.as_str()
+            ],
+            texts
+        );
+        assert_eq!(
+            label,
+            &format!("Each: {each}<br>Total: {total} · Tip: {tip}")
+        );
+        assert_eq!(live_result, &format!("Each: {each} · Total: {total}"));
+        assert_eq!(
+            copy_text,
+            &format!("Each: {each}\nTotal: {total} · Tip: {tip}")
+        );
+        let json = serde_json::to_value(&first).unwrap();
+        assert_eq!(json["ok"], "true");
+        for key in [
+            "tipAmount",
+            "totalBill",
+            "perPerson",
+            "tipText",
+            "totalText",
+            "perPersonText",
+            "label",
+            "liveResult",
+            "copyText",
+        ] {
+            assert!(json.get(key).is_some(), "missing {key}");
+        }
+        assert_eq!(json.as_object().unwrap().len(), 10);
+    }
+    for (bill, tip, people, error) in [
+        (-1.0, -1.0, 0.0, "Bill amount cannot be negative"),
+        (100.0, -1.0, 0.0, "Tip % cannot be negative"),
+        (
+            100.0,
+            15.0,
+            0.0,
+            "People must be a whole number (1 or more)",
+        ),
+        (
+            100.0,
+            15.0,
+            1.5,
+            "People must be a whole number (1 or more)",
+        ),
+        (
+            100.0,
+            15.0,
+            f64::NAN,
+            "People must be a whole number (1 or more)",
+        ),
+        (
+            100.0,
+            15.0,
+            f64::INFINITY,
+            "People must be a whole number (1 or more)",
+        ),
+    ] {
+        let first = calculate_tip_split(bill, tip, people);
+        assert_eq!(first, TipSplitResult::Err { error });
+        assert_eq!(first, calculate_tip_split(bill, tip, people));
+        assert_eq!(
+            serde_json::to_value(first).unwrap(),
+            serde_json::json!({"ok":"false", "error": error})
+        );
+    }
 }
 
 #[test]

@@ -483,6 +483,14 @@ fn validate_entry_fields(
         if input_c.chars().any(char::is_control) {
             return Err("history input contains control characters");
         }
+        if calculator == "tip"
+            && !input_c
+                .trim()
+                .parse::<f64>()
+                .is_ok_and(|n| n.is_finite() && n >= 1.0 && n.fract() == 0.0)
+        {
+            return Err("People must be a whole number (1 or more)");
+        }
     }
     let single_line_fields = [calculator_label, input_a, input_b, inputs_text, result_text];
     if single_line_fields
@@ -1311,15 +1319,12 @@ mod tests {
         // The optional field is validated on non-tip entries too, including byte length.
         for calculator in ["tax", "tip"] {
             entry.calculator = calculator.into();
-            for valid in [
-                "2".into(),
-                " 2 ".into(),
-                "1".repeat(MAX_FIELD_LEN),
-                "é".repeat(128),
-            ] {
+            for valid in ["2".into(), " 2 ".into(), "1".repeat(MAX_FIELD_LEN)] {
                 entry.input_c = Some(valid);
                 assert!(validate_new_entry(&entry).is_ok());
             }
+            entry.input_c = Some("é".repeat(128));
+            assert_eq!(validate_new_entry(&entry).is_ok(), calculator != "tip");
             entry.input_c = Some("2\n".into());
             assert!(validate_new_entry(&entry).is_err());
         }
@@ -1342,6 +1347,54 @@ mod tests {
         assert!(history_add_with_path(&state, entry, || Err("path failure".into())).is_err());
         assert_eq!(history_list_state(&state).unwrap(), different);
         assert_eq!(std::fs::read(&path).unwrap(), before);
+    }
+
+    #[test]
+    fn tip_history_add_and_load_require_positive_whole_people() {
+        use std::sync::Mutex;
+
+        let temp = TestTempDir::new("pct-tip-people-history");
+        let path = temp.path().join("history.json");
+        let invalid_path = temp.path().join("invalid.json");
+        let state = HistoryState {
+            in_memory_only: false,
+            entries: Mutex::new(Vec::new()),
+            next_id: Mutex::new(1),
+        };
+        let mut entry = sample_new_entry();
+        entry.calculator = "tip".into();
+        entry.mode = None;
+
+        for people in ["1", "4"] {
+            entry.input_c = Some(people.into());
+            let added = history_add_with_path(&state, entry.clone(), || Ok(path.clone())).unwrap();
+            assert_eq!(added[0].input_c.as_deref(), Some(people));
+            assert_eq!(load_history_from_path(&path), added);
+        }
+
+        let before = history_list_state(&state).unwrap();
+        let before_bytes = std::fs::read(&path).unwrap();
+        for people in ["0", "-1", "1.5", "NaN", "inf", "Infinity", "abc"] {
+            entry.input_c = Some(people.into());
+            assert_eq!(
+                history_add_with_path(&state, entry.clone(), || panic!(
+                    "invalid people input resolved path"
+                )),
+                Err("People must be a whole number (1 or more)".to_string()),
+                "history_add accepted {people:?}"
+            );
+            assert_eq!(history_list_state(&state).unwrap(), before);
+            assert_eq!(*state.next_id.lock().unwrap(), 3);
+            assert_eq!(std::fs::read(&path).unwrap(), before_bytes);
+
+            let mut stored = serde_json::to_value(&before[0]).unwrap();
+            stored["inputC"] = serde_json::json!(people);
+            std::fs::write(&invalid_path, serde_json::to_vec(&vec![stored]).unwrap()).unwrap();
+            assert!(
+                load_history_from_path(&invalid_path).is_empty(),
+                "history load accepted {people:?}"
+            );
+        }
     }
 
     #[test]

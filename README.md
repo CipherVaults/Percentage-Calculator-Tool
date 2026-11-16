@@ -5,13 +5,13 @@
 <h1 align="center">Percentage Calculator Tool</h1>
 
 <p align="center">
-  <strong>Offline percentage, pricing, and reverse tax/VAT calculator for Windows (Tauri v2 + Rust) and iPhone / Android PWA</strong>
+  <strong>Offline percentage, pricing, reverse tax/VAT, and tip calculator for Windows (Tauri v2 + Rust) and iPhone / Android PWA</strong>
 </p>
 
 <p align="center">
   <a href="https://ciphervaults.github.io/Percentage-Calculator-Tool/"><strong>Open Live Mobile &amp; Web App</strong></a>
   &nbsp;·&nbsp;
-  <a href="https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/latest"><strong>Download v2.2.1 Releases</strong></a>
+  <a href="https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/latest"><strong>Download v2.3.0 Releases</strong></a>
   &nbsp;·&nbsp;
   <a href="#security--privacy-hardening-v211--v221"><strong>Security Hardening</strong></a>
   &nbsp;·&nbsp;
@@ -22,7 +22,7 @@
 >
 > Always verify you are opening `https://ciphervaults.github.io/Percentage-Calculator-Tool/` directly before installing to your Home Screen. For Windows desktop builds, offline `.exe` / `.msi` installers, standalone HTML, and `SHA256SUMS.txt`, see [**GitHub Releases**](https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/latest).
 
-This project started as a single-file HTML percentage utility, became a structured Electron desktop app in v1.1.0, was rebuilt on **Tauri v2 + Rust** in **v2.0.0**, expanded in **v2.1.0** with input swapping, Markup & Profit Margin, Reverse Tax/VAT, persistent local history, a dark-terminal About modal, and a Mobile/Web PWA, was security-hardened in **v2.1.1**, refined in **v2.2.0** with formatted paste support, history filtering and single-item deletion, and a Settings-controlled GitHub Releases update checker, and hardened in **v2.2.1** with security audit fixes across the Service Worker, update checks, IPC/storage validation, and release CI.
+This project started as a single-file HTML percentage utility, became a structured Electron desktop app in v1.1.0, was rebuilt on **Tauri v2 + Rust** in **v2.0.0**, expanded in **v2.1.0** with input swapping, Markup & Profit Margin, Reverse Tax/VAT, persistent local history, a dark-terminal About modal, and a Mobile/Web PWA, was security-hardened in **v2.1.1**, refined in **v2.2.0** with formatted paste support, history filtering and single-item deletion, and a Settings-controlled GitHub Releases update checker, hardened in **v2.2.1** with security audit fixes across the Service Worker, update checks, IPC/storage validation, and release CI, and expanded in **v2.3.0** by **Antigravity** with Tip & Bill Split and a drag-and-drop, collapsible card layout.
 
 > Looking for the last Electron version? Check out the [`v1.1.0-electron`](https://github.com/CipherVaults/Percentage-Calculator-Tool/tree/v1.1.0-electron) tag.
 
@@ -41,7 +41,7 @@ This project started as a single-file HTML percentage utility, became a structur
 Made by **Mohamed Sayed · Ahmed Emara · DeepSeek · ChatGPT · Antigravity**.
 
 - **Creators:** Mohamed Sayed · Ahmed Emara
-- **AI Collaboration:** DeepSeek & ChatGPT (original HTML utility), Codex (v1.1 Electron packaging), and Antigravity (v2.0 Tauri + Rust rebuild, v2.1 feature expansion & mobile PWA, v2.1.1 security hardening, v2.2.0 calculator/history polish & update checker, v2.2.1 security audit hardening).
+- **AI Collaboration:** DeepSeek & ChatGPT (original HTML utility), Codex (v1.1 Electron packaging), and Antigravity (v2.0 Tauri + Rust rebuild, v2.1 feature expansion & mobile PWA, v2.1.1 security hardening, v2.2.0 calculator/history polish & update checker, v2.2.1 security audit hardening, v2.3.0 Tip & Bill Split and drag-and-drop/collapsible card layout).
 
 The repository remains intentionally transparent about that collaboration because the development record is part of the value of the project.
 
@@ -49,14 +49,14 @@ The repository remains intentionally transparent about that collaboration becaus
 
 ## What This App Is
 
-Percentage Calculator Tool is a practical offline utility for common percentage, pricing, and tax calculations on both Windows desktop and mobile devices.
+Percentage Calculator Tool is a practical offline utility for common percentage, pricing, tax, and tip calculations on both Windows desktop and mobile devices.
 
 It is designed for quick local use rather than account-based or cloud-connected workflows:
 
 - no login or user accounts
 - no telemetry, cookies, or tracking
 - zero runtime network calls during calculations (the Mobile & Web PWA works fully offline once cached; optional GitHub Releases update checks can be toggled in Settings)
-- local-only calculation history & settings (desktop stores up to 500 entries in `%APPDATA%\com.percentagecalculator.tool\history.json` and update preferences in `settings.json`; Mobile & Web stores up to 500 entries and preferences on-device in `localStorage`, clearable anytime)
+- local-only calculation history & settings (desktop stores up to 500 entries in `%APPDATA%\com.percentagecalculator.tool\history.json` and update preferences & card layout in `settings.json`; Mobile & Web stores up to 500 entries and preferences on-device in `localStorage`, clearable anytime)
 
 The app is intentionally small. Its value is speed, clarity, and an inspectable, hardened codebase.
 
@@ -64,7 +64,7 @@ The app is intentionally small. Its value is speed, clarity, and an inspectable,
 
 ## Mobile & Web Edition (iPhone & Android)
 
-A zero-dependency single-file HTML + offline PWA edition of **v2.2.1** lives in `mobile/` and is deployed from `main` to GitHub Pages:
+A zero-dependency single-file HTML + offline PWA edition of **v2.3.0** lives in `mobile/` and is deployed from `main` to GitHub Pages:
 
 - **Official Web App URL:** **[https://ciphervaults.github.io/Percentage-Calculator-Tool/](https://ciphervaults.github.io/Percentage-Calculator-Tool/)**
   - **iPhone / iPad (Safari):** Open the link in **Safari** → tap **Share (`↑`)** → **Add to Home Screen** → **Add**.
@@ -76,7 +76,7 @@ A zero-dependency single-file HTML + offline PWA edition of **v2.2.1** lives in 
 
 ## Features
 
-Seven calculator sections across Desktop and Mobile:
+Eight calculator sections across Desktop and Mobile:
 
 - **Percentage Change** — shows increase or decrease from an original value
 - **Percentage of Total** — finds what percent one value is of another
@@ -85,13 +85,17 @@ Seven calculator sections across Desktop and Mobile:
 - **Find Original Value** — finds the full value from a known percentage
 - **Markup & Profit Margin** — calculates net profit, markup % on cost, and gross margin % on selling price
 - **Reverse Tax / VAT** — adds tax to a net amount or extracts tax and net amount from a tax-inclusive total
+- **Tip & Bill Split** — calculates tip amount, total bill, and per-person split, with Bill, Tip %, `10%` / `15%` / `18%` / `20%` preset pills, `swap values`, and a whole-number People split
 
 Polish across Desktop & Mobile:
 
-- **quick-jump navigation bar** (`change`, `% of total`, `portion`, `discount`, `original`, `markup & margin`, `tax / vat`, `history`) right below the header for instant section scrolling
-- **`⇅ swap values` pill** between the two inputs on every calculator card
+- **quick-jump navigation bar** (`change`, `% of total`, `portion`, `discount`, `original`, `markup & margin`, `tax / vat`, `tip & split`, `history`) right below the header for instant section scrolling
+- **Drag-Handle (`⠿`) Card Reordering** — pointer-based handle-only reordering across all 8 cards, with synced quick-nav order and persistent `cardOrder`
+- **Card Collapsing (`[ − ]` / `[ + ]`)** — per-card collapse/expand with persistent `collapsedCards` and automatic expansion when jumping from quick-nav or history `↺ restore`
+- **Reset Card Order & Expand All** button (`#resetLayoutBtn`) inside the Settings modal
+- **`⇅ swap values` pill** between the first two inputs on every calculator card
 - **formatted paste & range safety** — accepts `$1,250.50`, `1,000`, `20%`, or `+$1,000`, parenthesizes negative operands (`(-50)`) in live formulas, blocks copying `"—"` or error messages, and displays unified `"Value out of range"` handling on overflow
-- **persistent local history tape** (up to 500 entries, newest first, with `YYYY-MM-DD HH:MM:SS` timestamps, calculator filter dropdown, `copy`, `↺ restore` with card highlight feedback, single-entry `×` delete, and `clear history`)
+- **persistent local history tape** (up to 500 entries, newest first, with `YYYY-MM-DD HH:MM:SS` timestamps, calculator filter dropdown, `copy`, `↺ restore` with card highlight feedback and 3-field Tip & Bill Split history restore (`inputC` for People), single-entry `×` delete, and `clear history`)
 - live calculation while typing (computed in Rust via Tauri IPC on desktop, matching JS engine in Mobile HTML across all 10,661 golden test cases)
 - Enter key support
 - copy-to-clipboard buttons with visible feedback
@@ -130,7 +134,7 @@ Following full source security audits, **v2.1.1** and **v2.2.1** apply defense-i
 
 ## Current Version
 
-Desktop & Mobile **v2.2.1** (Tauri v2 + Rust / Standalone Mobile PWA)
+Desktop & Mobile **v2.3.0** (Tauri v2 + Rust / Standalone Mobile PWA)
 
 ---
 
@@ -147,7 +151,7 @@ Mobile & Web Edition (mobile/index.html + mobile/sw.js)
   -> Validated on-device localStorage history (500-entry FIFO) + scoped Service Worker cache
 ```
 
-The UI stays plain HTML, CSS, and JavaScript — no frontend framework and no bundler. All seven percentage and pricing formulas live in a standalone Rust crate (`percent-core`) with zero UI dependencies (and match `mobile/index.html` identically across 10,661 golden test cases captured from the v1.1 JavaScript implementation).
+The UI stays plain HTML, CSS, and JavaScript — no frontend framework and no bundler. All eight percentage, pricing, and tip formulas live in a standalone Rust crate (`percent-core`) with zero UI dependencies and matching formulas in `mobile/index.html`. The preserved 10,661-case v1.1 golden suite covers formatting and the original five calculators, with distinct checks for Markup & Margin, Reverse Tax/VAT, and Tip & Bill Split.
 
 ---
 
@@ -195,7 +199,7 @@ Unit tests (math + storage/validation) and the 10,661-case v1.1 golden parity su
 cargo test --workspace --locked
 ```
 
-End-to-end desktop smoke test (launches the real Tauri app in hidden mode and verifies focus, all seven calculators, input swapping, Markup & Margin, Reverse Tax/VAT add & extract, negative formula parentheses, paste sanitization, overflow handling, error copy blocking, persistent history add/filter/restore/delete/clear, dark About & Settings modals, mocked startup/manual update check, copy feedback, Clear All, version `2.2.1`, and the system clipboard):
+End-to-end desktop smoke test (launches the real Tauri app in hidden mode and verifies focus, all eight calculators, input swapping, Markup & Margin, Reverse Tax/VAT add & extract, Tip & Bill Split with 10%/15%/18%/20% presets, negative formula parentheses, paste sanitization, overflow handling, error copy blocking, persistent history add/filter/restore/delete/clear (including 3-field Tip & Bill Split restore), collapse/expand, handle-only card reordering with synced quick-nav, reset layout, dark About & Settings modals, mocked startup/manual update check, copy feedback, Clear All, version `2.3.0`, and the system clipboard):
 
 ```powershell
 cargo run -p percentage-calculator-tool -- --smoke-test
@@ -211,22 +215,22 @@ cargo tauri build -- --locked
 
 Local outputs under `target/release/`:
 
-- `bundle/nsis/Percentage Calculator Tool_2.2.1_x64-setup.exe` — NSIS installer
-- `bundle/msi/Percentage Calculator Tool_2.2.1_x64_en-US.msi` — MSI installer
+- `bundle/nsis/Percentage Calculator Tool_2.3.0_x64-setup.exe` — NSIS installer
+- `bundle/msi/Percentage Calculator Tool_2.3.0_x64_en-US.msi` — MSI installer
 - `percentage-calculator-tool.exe` — standalone portable executable (uses the system WebView2 runtime)
 
 Every push to `main`, pull request, and `v*` tag builds on GitHub Actions (`windows-latest`), and releases on `main` / `v*` tags attach the installers, portable `.exe`, standalone Mobile HTML, and `SHA256SUMS.txt` (GitHub replaces spaces with dots in uploaded release filenames):
 
-- `Percentage.Calculator.Tool_2.2.1_x64-setup.exe`
-- `Percentage.Calculator.Tool_2.2.1_x64_en-US.msi`
-- `Percentage.Calculator.Tool.Portable.2.2.1.exe`
-- `Percentage.Calculator.Tool.Mobile.2.2.1.html`
+- `Percentage.Calculator.Tool_2.3.0_x64-setup.exe`
+- `Percentage.Calculator.Tool_2.3.0_x64_en-US.msi`
+- `Percentage.Calculator.Tool.Portable.2.3.0.exe`
+- `Percentage.Calculator.Tool.Mobile.2.3.0.html`
 - `SHA256SUMS.txt`
 
 Verify any downloaded file in PowerShell before opening:
 
 ```powershell
-Get-FileHash .\Percentage.Calculator.Tool.Portable.2.2.1.exe -Algorithm SHA256
+Get-FileHash .\Percentage.Calculator.Tool.Portable.2.3.0.exe -Algorithm SHA256
 # Compare the lowercase hash against the matching line in SHA256SUMS.txt
 ```
 

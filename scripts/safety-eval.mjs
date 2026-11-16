@@ -420,6 +420,20 @@ const CALC_SPECS = Object.freeze({
     ipcArgs: (a, b, mode) => ({ amount: a, ratePercent: b, mode: mode || "add" }),
     historyType: "Tax / VAT",
   },
+  tip: {
+    cardId: "card-tip",
+    inputIds: ["tipBill", "tipPercent", "tipPeople"],
+    calcBtn: "calcTipBtn",
+    resetBtn: "resetTipBtn",
+    copyBtn: "copyTipBtn",
+    swapBtn: "swapTipBtn",
+    resultId: "tipResult",
+    liveFormulaId: "tipLiveFormula",
+    liveResultId: "tipLiveResult",
+    bridgeOp: "tip_split",
+    ipcArgs: (a, b, c) => ({ bill: a, tipPercent: b, people: c ?? 1 }),
+    historyType: "Tip & Bill Split",
+  },
 });
 
 /**
@@ -429,9 +443,10 @@ const CALC_SPECS = Object.freeze({
  * - `guardedUi`: expected safe Guarded UI behavior (clamps any non-finite intermediate/formatted
  *   value to out-of-range error and rejects zero-cost/div-zero/negative errors cleanly).
  */
-function computeReferenceOracle(calcId, mode, a, b) {
+function computeReferenceOracle(calcId, mode, a, b, c = 1) {
   const numA = typeof a === "number" ? a : Number(a);
   const numB = typeof b === "number" ? b : Number(b);
+  const numC = typeof c === "number" ? c : Number(c);
   const finiteInputs = Number.isFinite(numA) && Number.isFinite(numB);
 
   let raw = null;
@@ -552,6 +567,27 @@ function computeReferenceOracle(calcId, mode, a, b) {
         liveTokens: [nStr],
       };
     }
+  } else if (calcId === "tip") {
+    if (numA < 0) {
+      raw = { ok: false, errorCategory: "invalid", error: "Bill amount cannot be negative", formattedTokens: [] };
+    } else if (numB < 0) {
+      raw = { ok: false, errorCategory: "invalid", error: "Tip % cannot be negative", formattedTokens: [] };
+    } else if (!Number.isFinite(numC) || numC < 1 || !Number.isInteger(numC)) {
+      raw = { ok: false, errorCategory: "invalid", error: "People must be a whole number (1 or more)", formattedTokens: [] };
+    } else {
+      const tipAmount = numA * (numB / 100);
+      const totalBill = numA + tipAmount;
+      const perPerson = totalBill / numC;
+      const perStr = refFormatDecimal(perPerson);
+      const totStr = refFormatDecimal(totalBill);
+      const tipStr = refFormatDecimal(tipAmount);
+      raw = {
+        ok: true, tipAmount, totalBill, perPerson,
+        label: `Each: ${perStr}<br>Total: ${totStr} · Tip: ${tipStr}`,
+        formattedTokens: [perStr, totStr, tipStr],
+        liveTokens: [perStr, totStr],
+      };
+    }
   } else {
     throw new Error(`Unknown calcId: ${calcId}`);
   }
@@ -570,6 +606,9 @@ function computeReferenceOracle(calcId, mode, a, b) {
       rawHasNonFinite = true;
     }
     if (raw.gross !== undefined && (!Number.isFinite(raw.net) || !Number.isFinite(raw.tax) || !Number.isFinite(raw.gross))) {
+      rawHasNonFinite = true;
+    }
+    if (raw.tipAmount !== undefined && (!Number.isFinite(raw.tipAmount) || !Number.isFinite(raw.totalBill) || !Number.isFinite(raw.perPerson))) {
       rawHasNonFinite = true;
     }
   }
@@ -734,7 +773,7 @@ class RustEvalBridge {
     });
   }
 
-  async call(surface, op, a, b = null, mode = null) {
+  async call(surface, op, a, b = null, mode = null, c = null) {
     if (!this.available) {
       return {
         ok: false,
@@ -750,6 +789,7 @@ class RustEvalBridge {
           a: encodeBridgeArg(a),
           b: encodeBridgeArg(b),
           mode: mode ?? null,
+          ...(c !== null ? { c: encodeBridgeArg(c) } : {}),
         },
         10000
       );
@@ -777,7 +817,7 @@ class RustEvalBridge {
         const current = idx;
         idx += 1;
         const r = requests[current];
-        out[current] = await this.call(r.surface, r.op, r.a, r.b, r.mode);
+        out[current] = await this.call(r.surface, r.op, r.a, r.b, r.mode, r.c ?? null);
       }
     };
     const workers = [];
@@ -844,6 +884,13 @@ class MockEvent {
     this.shiftKey = Boolean(init.shiftKey);
     this.altKey = Boolean(init.altKey);
     this.clipboardData = init.clipboardData ?? null;
+    this.clientX = init.clientX ?? 0;
+    this.clientY = init.clientY ?? 0;
+    this.pointerId = init.pointerId ?? 1;
+    this.button = init.button ?? 0;
+    this.buttons = init.buttons ?? 0;
+    this.isPrimary = init.isPrimary ?? true;
+    this.pointerType = init.pointerType ?? "mouse";
   }
   preventDefault() {
     if (this.cancelable) this.defaultPrevented = true;
@@ -943,6 +990,7 @@ class MockElement {
     this._attrs = new Map();
     this._listeners = new Map();
     this._value = "";
+    this._pointerCaptures = new Set();
     this._checked = false;
     this._disabled = false;
     this._hidden = false;
@@ -1088,6 +1136,28 @@ class MockElement {
 
   get children() {
     return this.childNodes.filter((n) => n.nodeType === 1);
+  }
+  get firstElementChild() {
+    return this.children[0] || null;
+  }
+  get lastElementChild() {
+    const ch = this.children;
+    return ch.length > 0 ? ch[ch.length - 1] : null;
+  }
+  get parentElement() {
+    return this.parentNode && this.parentNode.nodeType === 1 ? this.parentNode : null;
+  }
+  get previousElementSibling() {
+    if (!this.parentNode) return null;
+    const ch = this.parentNode.children;
+    const idx = ch.indexOf(this);
+    return idx > 0 ? ch[idx - 1] : null;
+  }
+  get nextElementSibling() {
+    if (!this.parentNode) return null;
+    const ch = this.parentNode.children;
+    const idx = ch.indexOf(this);
+    return idx >= 0 && idx < ch.length - 1 ? ch[idx + 1] : null;
   }
 
   get textContent() {
@@ -1278,6 +1348,20 @@ class MockElement {
     }
   }
   scrollIntoView() {}
+  setPointerCapture(id) {
+    this._pointerCaptures.add(id);
+  }
+  releasePointerCapture(id) {
+    this._pointerCaptures.delete(id);
+  }
+  hasPointerCapture(id) {
+    return this._pointerCaptures.has(id);
+  }
+  getBoundingClientRect() {
+    const idx = Math.max(0, this.parentNode?.children.indexOf(this) ?? 0);
+    const top = idx * 120;
+    return { top, bottom: top + 100, height: 100, left: 0, right: 400, width: 400, x: 0, y: top };
+  }
   setSelectionRange() {
     this.select();
   }
@@ -1732,7 +1816,7 @@ function createMobilePureMathRunner(artifacts) {
   artifacts.mobileMathVmScript.runInContext(ctx);
   return {
     formatDecimal: (n) => ctx.formatDecimal(n),
-    runCalc(calcId, mode, a, b) {
+    runCalc(calcId, mode, a, b, c = 1) {
       if (calcId === "change") return ctx.calcChange(a, b);
       if (calcId === "percent") return ctx.calcPercentOfTotal(a, b);
       if (calcId === "what") return ctx.calcPortion(a, b);
@@ -1740,12 +1824,13 @@ function createMobilePureMathRunner(artifacts) {
       if (calcId === "base") return ctx.calcOriginal(a, b);
       if (calcId === "markup") return ctx.calcMarkupMargin(a, b);
       if (calcId === "tax") return ctx.calcTax(a, b, mode || "add");
+      if (calcId === "tip") return ctx.calcTipSplit(a, b, c);
       throw new Error(`Unknown calcId: ${calcId}`);
     },
   };
 }
 
-const VALID_CALCULATOR_SET = new Set([
+const DEFAULT_CARD_ORDER = Object.freeze([
   "change",
   "percent",
   "what",
@@ -1753,10 +1838,19 @@ const VALID_CALCULATOR_SET = new Set([
   "base",
   "markup",
   "tax",
+  "tip",
 ]);
+const VALID_CALCULATOR_SET = new Set(DEFAULT_CARD_ORDER);
 
 function createStatefulMockTauriBackend(rustBridge, opts = {}) {
-  let settings = { checkUpdatesOnStartup: Boolean(opts.initialAutoUpdate ?? false) };
+  const cloneSettings = (value) => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+  let settings = Object.prototype.hasOwnProperty.call(opts, "initialRawSettings")
+    ? cloneSettings(opts.initialRawSettings)
+    : {
+        checkUpdatesOnStartup: Boolean(opts.initialAutoUpdate ?? false),
+        cardOrder: [...(opts.initialCardOrder ?? DEFAULT_CARD_ORDER)],
+        collapsedCards: [...(opts.initialCollapsedCards ?? [])],
+      };
   let history = Array.isArray(opts.initialHistory)
     ? opts.initialHistory.map((e) => ({ ...e }))
     : [];
@@ -1764,9 +1858,9 @@ function createStatefulMockTauriBackend(rustBridge, opts = {}) {
   let updateResult = opts.updateResult ?? {
     ok: true,
     updateAvailable: false,
-    currentVersion: "2.2.1",
-    latestVersion: "2.2.1",
-    releaseUrl: "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.2.1",
+    currentVersion: "2.3.0",
+    latestVersion: "2.3.0",
+    releaseUrl: "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.3.0",
     publishedAt: "2026-10-01T00:00:00Z",
     note: null,
   };
@@ -1780,7 +1874,7 @@ function createStatefulMockTauriBackend(rustBridge, opts = {}) {
   const deferPredicates = [];
 
   const backend = {
-    getSettings: () => ({ ...settings }),
+    getSettings: () => cloneSettings(settings),
     getHistory: () => history.map((h) => ({ ...h })),
     setSettingsFailureCount(n) {
       setSettingsFailuresRemaining = n;
@@ -1830,19 +1924,33 @@ function createStatefulMockTauriBackend(rustBridge, opts = {}) {
     },
     async _dispatch(cmd, args = {}) {
       if (cmd === "is_smoke_test") return false;
-      if (cmd === "get_app_info") return { version: "2.2.1", platform: "windows" };
-      if (cmd === "get_settings") return { ...settings };
+      if (cmd === "get_app_info") return { version: "2.3.0", platform: "windows" };
+      if (cmd === "get_settings") return cloneSettings(settings);
       if (cmd === "set_settings") {
         if (setSettingsFailuresRemaining > 0) {
           setSettingsFailuresRemaining -= 1;
           throw new Error("Injected settings persistence failure");
         }
         const incoming = args?.settings;
-        if (!incoming || typeof incoming.checkUpdatesOnStartup !== "boolean") {
+        const proto = incoming && typeof incoming === "object" ? Object.getPrototypeOf(incoming) : undefined;
+        const ctor = proto && Object.getOwnPropertyDescriptor(proto, "constructor")?.value;
+        const plain = incoming !== null && typeof incoming === "object" &&
+          (proto === null || (Object.getPrototypeOf(proto) === null && typeof ctor === "function" &&
+            Function.prototype.toString.call(ctor) === Function.prototype.toString.call(Object)));
+        const validKeys = (keys) => Array.isArray(keys) &&
+          Array.from(keys).every((key) => typeof key === "string" && VALID_CALCULATOR_SET.has(key)) &&
+          new Set(keys).size === keys.length;
+        if (!plain || typeof incoming.checkUpdatesOnStartup !== "boolean" ||
+            !validKeys(incoming.cardOrder) || incoming.cardOrder.length !== DEFAULT_CARD_ORDER.length ||
+            !validKeys(incoming.collapsedCards)) {
           throw new Error("Invalid settings payload");
         }
-        settings = { checkUpdatesOnStartup: incoming.checkUpdatesOnStartup };
-        return { ...settings };
+        settings = {
+          checkUpdatesOnStartup: incoming.checkUpdatesOnStartup,
+          cardOrder: [...incoming.cardOrder],
+          collapsedCards: [...incoming.collapsedCards],
+        };
+        return cloneSettings(settings);
       }
       if (cmd === "history_list") return history.map((h) => ({ ...h }));
       if (cmd === "history_add") {
@@ -1851,11 +1959,17 @@ function createStatefulMockTauriBackend(rustBridge, opts = {}) {
         const calcLabel = String(entry.calculatorLabel ?? "");
         const aStr = String(entry.inputA ?? "");
         const bStr = String(entry.inputB ?? "");
+        const inputC = entry.inputC ?? null;
         const inputsText = String(entry.inputsText ?? "");
         const resText = String(entry.resultText ?? entry.result ?? "");
         const copyText = String(entry.copyText ?? resText);
         const mode = entry.mode ?? null;
         if (!VALID_CALCULATOR_SET.has(calc)) throw new Error(`Invalid calculator: ${calc}`);
+        if ((inputC !== null && (typeof inputC !== "string" || !inputC.trim() ||
+            inputC.length > 256 || /[\u0000-\u001F\u007F]/.test(inputC))) ||
+            (calc === "tip" && inputC === null)) {
+          throw new Error("Invalid history inputC.");
+        }
         for (const f of [calcLabel, aStr, bStr, inputsText, resText, copyText]) {
           if (f.length > 256) throw new Error("Field exceeds 256 characters.");
         }
@@ -1867,6 +1981,7 @@ function createStatefulMockTauriBackend(rustBridge, opts = {}) {
           history[0].calculator === calc &&
           history[0].inputA === aStr &&
           history[0].inputB === bStr &&
+          (history[0].inputC ?? null) === inputC &&
           history[0].resultText === resText &&
           (history[0].mode ?? null) === mode
         ) {
@@ -1880,6 +1995,7 @@ function createStatefulMockTauriBackend(rustBridge, opts = {}) {
           calculatorLabel: calcLabel,
           inputA: aStr,
           inputB: bStr,
+          ...(inputC !== null ? { inputC } : {}),
           mode,
           inputsText,
           resultText: resText,
@@ -1932,9 +2048,10 @@ function createStatefulMockTauriBackend(rustBridge, opts = {}) {
       else if (cmd === "calc_original") bridgeCall = ["calc_original", args.value, args.percent, null];
       else if (cmd === "calc_markup_margin") bridgeCall = ["calc_markup_margin", args.cost, args.sellingPrice, null];
       else if (cmd === "calc_tax") bridgeCall = ["calc_tax", args.amount, args.ratePercent, args.mode ?? "add"];
+      else if (cmd === "calc_tip_split") bridgeCall = ["tip_split", args.bill, args.tipPercent, null, args.people];
       else throw new Error(`Unsupported mock Tauri command: ${cmd}`);
 
-      const res = await rustBridge.call("ipc", bridgeCall[0], bridgeCall[1], bridgeCall[2], bridgeCall[3]);
+      const res = await rustBridge.call("ipc", bridgeCall[0], bridgeCall[1], bridgeCall[2], bridgeCall[3], bridgeCall[4] ?? null);
       if (res.broken) {
         const err = new Error(res.reason || "RUST_BRIDGE_UNAVAILABLE");
         err.isBrokenBridge = true;
@@ -1991,8 +2108,12 @@ async function createDesktopSandbox(artifacts, rustBridge, opts = {}) {
     __TAURI__: { core: { invoke: wrappedInvoke } },
     addEventListener: () => {},
     removeEventListener: () => {},
+    innerWidth: 1200,
+    innerHeight: 900,
+    scrollBy: () => {},
     matchMedia: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
     requestAnimationFrame: (fn) => timers.setTimeout(fn, 0),
+    cancelAnimationFrame: (id) => timers.clearTimeout(id),
     setTimeout: timers.setTimeout,
     clearTimeout: timers.clearTimeout,
     setInterval: timers.setInterval,
@@ -2011,6 +2132,7 @@ async function createDesktopSandbox(artifacts, rustBridge, opts = {}) {
     Event: MockEvent,
     CustomEvent: MockEvent,
     KeyboardEvent: MockEvent,
+    PointerEvent: MockEvent,
     URL,
     URLSearchParams,
     Intl,
@@ -2033,6 +2155,7 @@ async function createDesktopSandbox(artifacts, rustBridge, opts = {}) {
     setInterval: timers.setInterval,
     clearInterval: timers.clearInterval,
     requestAnimationFrame: windowObj.requestAnimationFrame,
+    cancelAnimationFrame: windowObj.cancelAnimationFrame,
     queueMicrotask,
     console: { log: () => {}, warn: () => {}, error: (...a) => unhandledErrors.push(a.join(" ")) },
   });
@@ -2118,17 +2241,17 @@ async function createMobileSandbox(artifacts, opts = {}) {
     status: 200,
     headers: { get: () => "120" },
     text: async () => JSON.stringify({
-      tag_name: "v2.2.1",
+      tag_name: "v2.3.0",
       draft: false,
       prerelease: false,
-      html_url: "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.2.1",
+      html_url: "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.3.0",
       published_at: "2026-10-01T00:00:00Z",
     }),
     json: async () => ({
-      tag_name: "v2.2.1",
+      tag_name: "v2.3.0",
       draft: false,
       prerelease: false,
-      html_url: "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.2.1",
+      html_url: "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.3.0",
       published_at: "2026-10-01T00:00:00Z",
     }),
   }));
@@ -2188,8 +2311,12 @@ async function createMobileSandbox(artifacts, opts = {}) {
     },
     addEventListener: () => {},
     removeEventListener: () => {},
+    innerWidth: 1200,
+    innerHeight: 900,
+    scrollBy: () => {},
     matchMedia: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
     requestAnimationFrame: (fn) => timers.setTimeout(fn, 0),
+    cancelAnimationFrame: (id) => timers.clearTimeout(id),
     setTimeout: timers.setTimeout,
     clearTimeout: timers.clearTimeout,
     setInterval: timers.setInterval,
@@ -2217,6 +2344,7 @@ async function createMobileSandbox(artifacts, opts = {}) {
     Event: MockEvent,
     CustomEvent: MockEvent,
     KeyboardEvent: MockEvent,
+    PointerEvent: MockEvent,
     URL,
     URLSearchParams,
     Intl,
@@ -2240,6 +2368,7 @@ async function createMobileSandbox(artifacts, opts = {}) {
     setInterval: timers.setInterval,
     clearInterval: timers.clearInterval,
     requestAnimationFrame: windowObj.requestAnimationFrame,
+    cancelAnimationFrame: windowObj.cancelAnimationFrame,
     queueMicrotask,
     console: { log: () => {}, warn: () => {}, error: (...a) => unhandledErrors.push(a.join(" ")) },
   });
@@ -2279,6 +2408,7 @@ async function createMobileSandbox(artifacts, opts = {}) {
     getClipboardWrites: () => [...clipboardWrites],
     getExecCommandCopies: () => doc.clipboardExecSpy.calls.filter((c) => c.cmd === "copy").map((c) => c.text),
     getUnhandledErrors: () => [...unhandledErrors],
+    ctx,
     drain,
   };
 }
@@ -2293,7 +2423,7 @@ function isUiErrorElement(resEl) {
   );
 }
 
-async function uiSetInputsAndEvaluate(sandbox, calcId, mode, aVal, bVal) {
+async function uiSetInputsAndEvaluate(sandbox, calcId, mode, aVal, bVal, cVal = null) {
   const spec = CALC_SPECS[calcId];
   if (calcId === "tax") {
     const modeBtn = sandbox.document.getElementById(mode === "extract" ? "taxModeExtractBtn" : "taxModeAddBtn");
@@ -2303,9 +2433,16 @@ async function uiSetInputsAndEvaluate(sandbox, calcId, mode, aVal, bVal) {
   const elB = sandbox.document.getElementById(spec.inputIds[1]);
   elA.value = encodeNumInput(aVal);
   elB.value = encodeNumInput(bVal);
+  const elC = spec.inputIds[2] ? sandbox.document.getElementById(spec.inputIds[2]) : null;
+  if (elC) elC.value = aVal === "" && bVal === "" ? "1" : encodeNumInput(cVal ?? 1);
   elB.dispatchEvent(new MockEvent("input", { bubbles: true }));
   await sandbox.drain();
+  return readUiCalculation(sandbox, calcId);
+}
 
+function readUiCalculation(sandbox, calcId) {
+  const spec = CALC_SPECS[calcId];
+  const [elA, elB, elC] = spec.inputIds.map((id) => sandbox.document.getElementById(id));
   const resEl = sandbox.document.getElementById(spec.resultId);
   const liveEl = sandbox.document.getElementById(spec.liveResultId);
   const formulaEl = sandbox.document.getElementById(spec.liveFormulaId);
@@ -2321,12 +2458,63 @@ async function uiSetInputsAndEvaluate(sandbox, calcId, mode, aVal, bVal) {
     broken: false,
     inputA: elA.value,
     inputB: elB.value,
+    ...(elC ? { inputC: elC.value } : {}),
     resultText: resEl ? resEl.textContent : "",
     isError: isUiErrorElement(resEl),
     liveText: liveEl ? liveEl.textContent : "",
     formulaText: formulaEl ? formulaEl.textContent : "",
     cardRestored: cardEl ? cardEl.classList.contains("card-restored") : false,
   };
+}
+
+function readCardLayout(sandbox) {
+  const doc = sandbox.document;
+  const cards = doc.getElementById("cardsContainer")?.children || [];
+  const links = doc.querySelectorAll(".quick-nav .quick-link");
+  const cardOrder = cards.map((card) => card.id.replace(/^card-/, ""));
+  const collapsedCards = cards.filter((card) => card.classList.contains("card-collapsed"))
+    .map((card) => card.id.replace(/^card-/, ""));
+  return {
+    cardOrder,
+    collapsedCards,
+    navOrder: links.filter((link) => link.hasAttribute("data-calc")).map((link) => link.dataset.calc),
+    historyLinkLast: links[links.length - 1]?.getAttribute("href") === "#historySection",
+    controlsMatch: cards.length === DEFAULT_CARD_ORDER.length && cards.every((card) => {
+      const toggle = card.querySelector("[aria-expanded]");
+      const collapsed = card.classList.contains("card-collapsed");
+      return toggle?.getAttribute("aria-expanded") === String(!collapsed) &&
+        (collapsed ? /\[\s*\+\s*\]/ : /\[\s*−\s*\]/).test(toggle.textContent);
+    }),
+    autoUpdateChecked: doc.getElementById("autoUpdateToggle")?.checked,
+    prototypeIntact: Object.keys(Object.prototype).length === 0 &&
+      vm.runInContext("Object.keys(Object.getPrototypeOf({})).length === 0 && Object.keys(Object.prototype).length === 0", sandbox.ctx),
+  };
+}
+
+function readPersistedSettings(sandbox) {
+  return sandbox.surface === "desktop" ? sandbox.backend.getSettings()
+    : JSON.parse(sandbox.storage.getItem("pct_tool_settings_v1") || "null");
+}
+
+async function dragFirstCardToEnd(sandbox) {
+  const container = sandbox.document.getElementById("cardsContainer");
+  const cards = container?.children || [];
+  const handle = cards[0]?.querySelector(".drag-handle");
+  if (!handle || cards.length !== DEFAULT_CARD_ORDER.length) return false;
+  const before = cards.map((card) => card.id);
+  const start = cards[0].getBoundingClientRect();
+  const end = cards[cards.length - 1].getBoundingClientRect();
+  handle.dispatchEvent(new MockEvent("pointerdown", {
+    bubbles: true, cancelable: true, clientX: 20, clientY: start.top + 20, buttons: 1,
+  }));
+  handle.dispatchEvent(new MockEvent("pointermove", {
+    bubbles: true, cancelable: true, clientX: 20, clientY: end.bottom + 60, buttons: 1,
+  }));
+  handle.dispatchEvent(new MockEvent("pointerup", {
+    bubbles: true, cancelable: true, clientX: 20, clientY: end.bottom + 60, buttons: 0,
+  }));
+  await sandbox.drain();
+  return deepEqualObjectIs(container.children.map((card) => card.id), [...before.slice(1), before[0]]);
 }
 
 // ============================================================================
@@ -2342,7 +2530,7 @@ function checkErrorMessageCategory(text, category) {
   const s = String(text ?? "");
   if (category === "div-zero") return /cannot be zero|zero/i.test(s);
   if (category === "out-of-range") return /out of range|range|too large/i.test(s);
-  return /valid number|cannot be negative|greater than zero|cannot be zero|negative|invalid|range|zero/i.test(s);
+  return /valid number|cannot be negative|greater than zero|cannot be zero|whole number|negative|invalid|range|zero/i.test(s);
 }
 
 /**
@@ -2394,6 +2582,9 @@ function gradeObservation(observation, specCheck, options = {}) {
     criteria.matches_math_spec = specCheck.expectRawOk
       ? ok && checkResultTokens(outStr, specCheck.expectedRawTokens || [])
       : !ok;
+    if (!specCheck.expectRawOk && specCheck.expectedRawError) {
+      criteria.rejection_matches_spec = outStr.includes(specCheck.expectedRawError);
+    }
     if (specCheck.requireReplay) {
       criteria.deterministic_replay = Boolean(observation.replayPassed);
     }
@@ -2421,10 +2612,13 @@ function gradeObservation(observation, specCheck, options = {}) {
     if (specCheck.expectRejected) {
       criteria.prototype_intact = Boolean(observation.prototypeIntact);
       criteria.rejected_cleanly = !observation.cardRestored && !observation.restoredResultOk;
+      if (specCheck.requireUntouchedInputs) criteria.inputs_unchanged = Boolean(observation.inputsUnchanged);
     } else {
       criteria.prototype_intact = Boolean(observation.prototypeIntact);
       criteria.inputs_restored =
-        observation.restoredA === specCheck.expectedA && observation.restoredB === specCheck.expectedB;
+        observation.restoredA === specCheck.expectedA && observation.restoredB === specCheck.expectedB &&
+        (specCheck.expectedC === undefined || observation.restoredC === specCheck.expectedC);
+      if (specCheck.requireHistoryRoundtrip) criteria.history_input_c_roundtrip = Boolean(observation.historyRoundtrip);
       criteria.computed_after_restore =
         !observation.isError &&
         !/Value out of range/i.test(String(observation.resultText ?? "")) &&
@@ -2436,6 +2630,27 @@ function gradeObservation(observation, specCheck, options = {}) {
     criteria.calc_ok = !observation.isError && !hasNonFiniteDisplayToken(observation.resultText);
     criteria.copy_worked = Boolean(observation.copySucceeded);
     criteria.history_bounded = Boolean(observation.historyWithinBounds);
+  } else if (specCheck.kind === "tip_preset_guard") {
+    criteria.preset_control_present = Boolean(observation.controlPresent);
+    criteria.preset_updates_input = observation.inputB === specCheck.expectedPercent;
+    criteria.preset_evaluates = !observation.isError && checkResultTokens(observation.resultText, specCheck.expectedTokens);
+    criteria.no_non_finite_leak = !hasNonFiniteDisplayToken(observation.resultText) && !hasNonFiniteDisplayToken(observation.liveText);
+  } else if (specCheck.kind === "layout_guard") {
+    criteria.prototype_intact = Boolean(observation.prototypeIntact);
+    criteria.card_order = deepEqualObjectIs(observation.cardOrder, specCheck.cardOrder);
+    criteria.quick_nav_order = deepEqualObjectIs(observation.navOrder, specCheck.cardOrder) && Boolean(observation.historyLinkLast);
+    criteria.collapsed_cards = deepEqualObjectIs([...(observation.collapsedCards || [])].sort(), [...specCheck.collapsedCards].sort());
+    criteria.accessible_controls = Boolean(observation.controlsMatch);
+    if (specCheck.autoUpdateChecked !== undefined) {
+      criteria.auto_update_setting = observation.autoUpdateChecked === specCheck.autoUpdateChecked;
+    }
+    if (specCheck.requirePersistence) {
+      criteria.layout_persisted = Array.isArray(observation.persistedSettings?.collapsedCards) &&
+        deepEqualObjectIs(observation.persistedSettings?.cardOrder, specCheck.cardOrder) &&
+        deepEqualObjectIs([...(observation.persistedSettings?.collapsedCards || [])].sort(), [...specCheck.collapsedCards].sort()) &&
+        observation.persistedSettings?.checkUpdatesOnStartup === observation.autoUpdateChecked &&
+        typeof observation.autoUpdateChecked === "boolean" && Boolean(observation.persistenceObserved);
+    }
   } else if (specCheck.kind === "update_and_settings") {
     criteria.version_display_safe = Boolean(observation.versionDisplayValid);
     criteria.security_filters_enforced = Boolean(observation.securityFiltersPassed);
@@ -3078,7 +3293,7 @@ async function runSliceA(artifacts, rustBridge, rng) {
     }
   }
 
-  // Valid-key restoreHistoryEntry across ALL 8 calculator/mode combos (with active calc_*!)
+  // Valid-key restoreHistoryEntry across all 9 calculator/mode combinations (with active IPC).
   const restoreCases = [
     { calcId: "change", mode: null, a: 80, b: 100 },
     { calcId: "percent", mode: null, a: 45, b: 180 },
@@ -3088,11 +3303,12 @@ async function runSliceA(artifacts, rustBridge, rng) {
     { calcId: "markup", mode: null, a: 120, b: 150 },
     { calcId: "tax", mode: "add", a: 200, b: 15 },
     { calcId: "tax", mode: "extract", a: 230, b: 15 },
+    { calcId: "tip", mode: null, a: 120, b: 15, c: 3 },
   ];
 
   for (const rc of restoreCases) {
     const spec = CALC_SPECS[rc.calcId];
-    const oracle = computeReferenceOracle(rc.calcId, rc.mode, rc.a, rc.b);
+    const oracle = computeReferenceOracle(rc.calcId, rc.mode, rc.a, rc.b, rc.c ?? 1);
     for (const surf of surfaces) {
       const entry = {
         id: 1731542400100 + records.length,
@@ -3101,6 +3317,7 @@ async function runSliceA(artifacts, rustBridge, rng) {
         calculatorLabel: spec.historyType,
         inputA: encodeNumInput(rc.a),
         inputB: encodeNumInput(rc.b),
+        ...(rc.c !== undefined ? { inputC: encodeNumInput(rc.c) } : {}),
         mode: rc.mode,
         inputsText: `${encodeNumInput(rc.a)} | ${encodeNumInput(rc.b)}`,
         resultText: "=stale-placeholder",
@@ -3115,6 +3332,8 @@ async function runSliceA(artifacts, rustBridge, rng) {
       const elB = freshSandbox.document.getElementById(spec.inputIds[1]);
       elA.value = "999";
       elB.value = "999";
+      const elC = spec.inputIds[2] ? freshSandbox.document.getElementById(spec.inputIds[2]) : null;
+      if (elC) elC.value = "9";
 
       const restoreBtns = freshSandbox.document.querySelectorAll(".history-restore-btn");
       if (restoreBtns.length > 0) restoreBtns[0].click();
@@ -3127,6 +3346,15 @@ async function runSliceA(artifacts, rustBridge, rng) {
       const restoredImm = cardEl ? cardEl.classList.contains("card-restored") : false;
       freshSandbox.timers.advance(2000);
       const clearedAfter = cardEl ? !cardEl.classList.contains("card-restored") : false;
+      let historyRoundtrip = false;
+      if (rc.calcId === "tip" && !brokenInfo.broken) {
+        freshSandbox.document.getElementById(spec.calcBtn).click();
+        await freshSandbox.drain();
+        if (surf.name === "desktop") Object.assign(brokenInfo, freshSandbox.getBrokenBridge());
+        const saved = surf.name === "desktop" ? freshSandbox.backend.getHistory()
+          : JSON.parse(freshSandbox.storage.getItem("pct_tool_history_v2") || "[]");
+        historyRoundtrip = saved[0]?.calculator === "tip" && saved[0]?.inputC === "3";
+      }
 
       const observation = {
         id: `A3-restore-${surf.name}-${rc.calcId}-${rc.mode || "std"}`,
@@ -3135,6 +3363,8 @@ async function runSliceA(artifacts, rustBridge, rng) {
         prototypeIntact: true,
         restoredA: elA.value,
         restoredB: elB.value,
+        restoredC: elC?.value,
+        historyRoundtrip,
         resultText: resEl ? resEl.textContent : "",
         liveText: liveEl ? liveEl.textContent : "",
         isError: resEl ? isUiErrorElement(resEl) : true,
@@ -3148,6 +3378,7 @@ async function runSliceA(artifacts, rustBridge, rng) {
         expectRejected: false,
         expectedA: encodeNumInput(rc.a),
         expectedB: encodeNumInput(rc.b),
+        ...(rc.c !== undefined ? { expectedC: encodeNumInput(rc.c), requireHistoryRoundtrip: true } : {}),
         expectedTokens: oracle.guardedUi.formattedTokens,
         expectedLiveTokens: oracle.guardedUi.liveTokens,
       };
@@ -3164,6 +3395,40 @@ async function runSliceA(artifacts, rustBridge, rng) {
     }
   }
 
+  // Corrupt tip history must never restore with a missing or invalid people count.
+  for (const surf of surfaces) {
+    for (const badC of [undefined, "0", "-1", "1.5"]) {
+      const entry = {
+        id: 1731542400900, timestampMs: 1731542400900,
+        calculator: "tip", calculatorLabel: "Tip & Bill Split",
+        inputA: "120", inputB: "15", ...(badC !== undefined ? { inputC: badC } : {}),
+        mode: null, inputsText: "120 | 15", resultText: "=stale-placeholder", copyText: "=stale-placeholder",
+      };
+      const fresh = surf.name === "desktop"
+        ? await createDesktopSandbox(artifacts, rustBridge, { initialHistory: [entry] })
+        : await createMobileSandbox(artifacts, { initialLocalStorage: { pct_tool_history_v2: JSON.stringify([entry]) } });
+      const inputs = CALC_SPECS.tip.inputIds.map((id) => fresh.document.getElementById(id));
+      inputs.forEach((el) => { el.value = "9"; });
+      fresh.document.querySelector(".history-restore-btn")?.click();
+      await fresh.drain();
+      const result = fresh.document.getElementById("tipResult");
+      const observation = {
+        id: `A3-tip-invalid-restore-${surf.name}-${badC ?? "missing"}`,
+        slice: "slice_a", surface: surf.name, broken: false,
+        prototypeIntact: Object.keys(Object.prototype).length === 0,
+        cardRestored: fresh.document.querySelectorAll(".card-restored").length > 0,
+        restoredResultOk: checkResultTokens(result?.textContent, ["46.00", "138.00", "18.00"]),
+        inputsUnchanged: inputs.every((el) => el.value === "9"),
+        resultText: result?.textContent || "",
+      };
+      const specCheck = { kind: "restore_guard", expectRejected: true, requireUntouchedInputs: true };
+      const strict = gradeObservation(observation, specCheck);
+      const lenient = gradeObservation(observation, specCheck, { rubricVariant: "lenient" });
+      records.push({ ...observation, passed: strict.passed, lenientPassed: lenient.passed,
+        outputLength: strict.outputLength, pairType: "adversarial_tip_history", subCategory: "tip_input_c_restore_guard" });
+    }
+  }
+
   // Overflow boundary checks (1.8e306, 9e306, -1.8e306) + >256-char valid copy decoupling
   const overflowCases = [
     { calcId: "what", mode: null, a: 100, b: 1.8e306 },
@@ -3174,12 +3439,13 @@ async function runSliceA(artifacts, rustBridge, rng) {
     { calcId: "base", mode: null, a: 1e307, b: 5 },
     { calcId: "change", mode: null, a: 1, b: 1e308 },
     { calcId: "markup", mode: null, a: 10, b: 0 }, // zero-selling margin test
+    { calcId: "tip", mode: null, a: 1.8e306, b: 15, c: 2 },
   ];
 
   for (const oc of overflowCases) {
-    const oracle = computeReferenceOracle(oc.calcId, oc.mode, oc.a, oc.b);
+    const oracle = computeReferenceOracle(oc.calcId, oc.mode, oc.a, oc.b, oc.c ?? 1);
     for (const surf of surfaces) {
-      const uiOut = await uiSetInputsAndEvaluate(surf.sandbox, oc.calcId, oc.mode, oc.a, oc.b);
+      const uiOut = await uiSetInputsAndEvaluate(surf.sandbox, oc.calcId, oc.mode, oc.a, oc.b, oc.c);
       const observation = {
         id: `A3-overflow-${surf.name}-${oc.calcId}-${encodeNumInput(oc.a)}-${encodeNumInput(oc.b)}`,
         slice: "slice_a",
@@ -3217,6 +3483,7 @@ async function runSliceA(artifacts, rustBridge, rng) {
     { calcId: "change", a: "100", b: "2." + "0".repeat(260) },
     { calcId: "discount", a: "500." + "0".repeat(260), b: "10" },
     { calcId: "tax", a: "200." + "0".repeat(255), b: "20" },
+    { calcId: "tip", a: "200." + "0".repeat(255), b: "15", c: "2" },
   ];
   for (const li of longInputs) {
     for (const surf of surfaces) {
@@ -3224,7 +3491,7 @@ async function runSliceA(artifacts, rustBridge, rng) {
         ? await createDesktopSandbox(artifacts, rustBridge)
         : await createMobileSandbox(artifacts);
       const spec = CALC_SPECS[li.calcId];
-      const uiOut = await uiSetInputsAndEvaluate(freshSandbox, li.calcId, "add", li.a, li.b);
+      const uiOut = await uiSetInputsAndEvaluate(freshSandbox, li.calcId, "add", li.a, li.b, li.c);
       if (uiOut.broken) {
         records.push({
           id: `A3-longcopy-${surf.name}-${li.calcId}`,
@@ -3298,7 +3565,7 @@ async function runSliceA(artifacts, rustBridge, rng) {
       uSandbox.backend.setUpdateResponse({
         ok: true,
         updateAvailable: false,
-        currentVersion: "2.2.1",
+        currentVersion: "2.3.0",
         latestVersion: "2.1.1",
         releaseUrl: "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.1.1",
       });
@@ -3307,7 +3574,7 @@ async function runSliceA(artifacts, rustBridge, rng) {
     uDoc.getElementById("checkUpdatesNowBtn").click();
     await uSandbox.drain();
     const statusText = uDoc.getElementById("updateStatusText").textContent;
-    const versionDisplayValid = statusText.includes("2.2.1") && !statusText.includes("2.1.1");
+    const versionDisplayValid = statusText.includes("2.3.0") && !statusText.includes("2.1.1");
 
     let securityFiltersPassed = true;
     if (surf.name === "desktop") {
@@ -3393,6 +3660,158 @@ async function runSliceA(artifacts, rustBridge, rng) {
     }
   }
 
+  // --- Sub-suite A5: Tip controls and card-layout security/integrity on both surfaces ---
+  const recordA5 = (surface, suffix, data, specCheck, pairType, subCategory) => {
+    const observation = { id: `A5-${surface}-${suffix}`, slice: "slice_a", surface, ...data };
+    const strict = gradeObservation(observation, specCheck);
+    const lenient = gradeObservation(observation, specCheck, { rubricVariant: "lenient" });
+    records.push({ ...observation, passed: strict.passed, lenientPassed: lenient.passed,
+      outputLength: strict.outputLength, pairType, subCategory });
+  };
+  const layoutSpec = (cardOrder = DEFAULT_CARD_ORDER, collapsedCards = [], extra = {}) => ({
+    kind: "layout_guard", cardOrder: [...cardOrder], collapsedCards, ...extra,
+  });
+  const calcUiSpec = (oracle) => ({
+    kind: "calc_ui", expectError: oracle.guardedUi.expectError,
+    errorCategory: oracle.guardedUi.errorCategory, expectedTokens: oracle.guardedUi.formattedTokens,
+    expectedLiveTokens: oracle.guardedUi.liveTokens,
+  });
+  for (const surf of surfaces) {
+    const sandbox = surf.sandbox;
+    for (const [percent, each] of [[10, "55.00"], [15, "57.50"], [18, "59.00"], [20, "60.00"]]) {
+      await uiSetInputsAndEvaluate(sandbox, "tip", null, 100, 0, 2);
+      const pill = sandbox.document.querySelector(`.preset-btn[data-tip="${percent}"]`);
+      pill?.click();
+      await sandbox.drain();
+      const out = readUiCalculation(sandbox, "tip");
+      recordA5(surf.name, `tip-preset-${percent}`, { ...out, brokenReason: out.reason, controlPresent: Boolean(pill) },
+        { kind: "tip_preset_guard", expectedPercent: String(percent), expectedTokens: [`Each: ${each}`] },
+        "benign_tip_preset", "tip_preset_controls");
+    }
+
+    const tipCases = [
+      { id: "negative-bill", a: -10, b: 15, c: 2, field: 0 },
+      { id: "negative-tip", a: 100, b: -5, c: 2, field: 1 },
+      { id: "zero-people", a: 100, b: 15, c: 0, field: 2 },
+      { id: "fractional-people", a: 100, b: 15, c: 1.5, field: 2 },
+      { id: "infinite-people", a: 100, b: 15, c: "1e309", field: 2 },
+    ];
+    for (const tc of tipCases) {
+      for (const route of ["input", "paste"]) {
+        let out;
+        let oracle = computeReferenceOracle("tip", null, tc.a, tc.b, tc.c);
+        if (route === "input") {
+          out = await uiSetInputsAndEvaluate(sandbox, "tip", null, tc.a, tc.b, tc.c);
+        } else {
+          await uiSetInputsAndEvaluate(sandbox, "tip", null, 100, 15, 2);
+          const input = sandbox.document.getElementById(CALC_SPECS.tip.inputIds[tc.field]);
+          const pasted = [tc.a, tc.b, tc.c][tc.field];
+          simulateBrowserPaste(input, encodeNumInput(pasted));
+          await sandbox.drain();
+          out = readUiCalculation(sandbox, "tip");
+          // Decimal overflow passes number-input syntax, but paste rejects it and preserves "2".
+          if (tc.id === "infinite-people") {
+            recordA5(surf.name, `${tc.id}-paste-value`, {
+              afterValue: input.value, domInjectedMarkup: false, resultText: out.resultText, broken: out.broken, brokenReason: out.reason,
+            }, { kind: "paste_guard", expectAccepted: false, preSeedValue: "2" },
+            "adversarial_tip_input", "tip_paste_guard");
+            oracle = computeReferenceOracle("tip", null, 100, 15, 2);
+          }
+        }
+        const spec = calcUiSpec(oracle);
+        if (tc.id === "infinite-people" && route === "input") spec.errorCategory = "out-of-range";
+        recordA5(surf.name, `${tc.id}-${route}`, { ...out, brokenReason: out.reason }, spec,
+          "adversarial_tip_input", "tip_domain_guard");
+        const control = await uiSetInputsAndEvaluate(sandbox, "tip", null, 80, 0, 2);
+        recordA5(surf.name, `${tc.id}-${route}-zero-tip-control`, { ...control, brokenReason: control.reason },
+          calcUiSpec(computeReferenceOracle("tip", null, 80, 0, 2)), "benign_zero_tip", "tip_domain_guard");
+      }
+    }
+
+    const settingsCases = [
+      { id: "duplicate", raw: { checkUpdatesOnStartup: false,
+        cardOrder: ["change", "change", "what", "discount", "base", "markup", "tax", "tip"], collapsedCards: [] } },
+      ...["evil_calc", "__proto__", "constructor"].map((key) => ({ id: `unknown-${key}`, raw: {
+        checkUpdatesOnStartup: false, cardOrder: [...DEFAULT_CARD_ORDER.slice(0, -1), key], collapsedCards: [key],
+      } })),
+      { id: "missing-tip", raw: { checkUpdatesOnStartup: false, cardOrder: DEFAULT_CARD_ORDER.slice(0, -1), collapsedCards: [] } },
+      { id: "prototype-json", raw: JSON.parse('{"checkUpdatesOnStartup":true,"cardOrder":["__proto__","constructor","toString","change","percent","what","discount","base"],"collapsedCards":["__proto__","constructor"]}') },
+      { id: "legacy-upgrade", raw: { checkUpdatesOnStartup: true } },
+    ];
+    for (const sc of settingsCases) {
+      const fresh = surf.name === "desktop"
+        ? await createDesktopSandbox(artifacts, rustBridge, { initialRawSettings: sc.raw })
+        : await createMobileSandbox(artifacts, { initialLocalStorage: { pct_tool_settings_v1: JSON.stringify(sc.raw) } });
+      recordA5(surf.name, `layout-startup-${sc.id}`, { ...readCardLayout(fresh), broken: false },
+        layoutSpec(DEFAULT_CARD_ORDER, [], sc.id === "legacy-upgrade" ? { autoUpdateChecked: true } : {}),
+        sc.id === "legacy-upgrade" ? "benign_legacy_settings" : "adversarial_layout_settings", "card_layout_startup");
+    }
+
+    const customOrder = [...DEFAULT_CARD_ORDER].reverse();
+    const custom = { checkUpdatesOnStartup: false, cardOrder: customOrder, collapsedCards: ["discount", "tax"] };
+    const restoreEntry = {
+      id: 1731542400999, timestampMs: 1731542400999, calculator: "tax", calculatorLabel: "Tax / VAT",
+      inputA: "100", inputB: "15", mode: "add", inputsText: "100 | 15", resultText: "stale", copyText: "stale",
+    };
+    const fresh = surf.name === "desktop"
+      ? await createDesktopSandbox(artifacts, rustBridge, { initialRawSettings: custom, initialHistory: [restoreEntry] })
+      : await createMobileSandbox(artifacts, { initialLocalStorage: {
+          pct_tool_settings_v1: JSON.stringify(custom), pct_tool_history_v2: JSON.stringify([restoreEntry]),
+        } });
+    const observeLayout = () => ({ ...readCardLayout(fresh), persistedSettings: readPersistedSettings(fresh), broken: false });
+    recordA5(surf.name, "layout-custom", observeLayout(), layoutSpec(customOrder, ["discount", "tax"]),
+      "benign_custom_layout", "card_layout_custom");
+    fresh.document.querySelector('.quick-nav .quick-link[data-calc="discount"]')?.click();
+    await fresh.drain();
+    recordA5(surf.name, "layout-quick-nav-expands", observeLayout(), layoutSpec(customOrder, ["tax"]),
+      "benign_custom_layout", "card_layout_auto_expand");
+    fresh.document.querySelector(".history-restore-btn")?.click();
+    await fresh.drain();
+    const restored = readUiCalculation(fresh, "tax");
+    recordA5(surf.name, "layout-restore-expands", { ...observeLayout(), broken: restored.broken, brokenReason: restored.reason },
+      layoutSpec(customOrder, []), "benign_custom_layout", "card_layout_auto_expand");
+    recordA5(surf.name, "layout-restore-recalculates", { ...restored, brokenReason: restored.reason },
+      calcUiSpec(computeReferenceOracle("tax", "add", 100, 15)), "benign_custom_layout", "card_layout_auto_expand");
+    // Re-collapse both cards so Reset must actively expand them as well as reorder them.
+    for (const key of ["discount", "tax"]) {
+      fresh.document.getElementById(`card-${key}`)?.querySelector("[aria-expanded]")?.click();
+      await fresh.drain();
+    }
+    recordA5(surf.name, "layout-collapse-before-reset", observeLayout(), layoutSpec(customOrder, ["discount", "tax"]),
+      "benign_custom_layout", "card_layout_collapse");
+    const writesBeforeReset = surf.name === "desktop"
+      ? fresh.backend.getIpcCalls().filter((call) => call.cmd === "set_settings").length : 0;
+    const settingsBeforeReset = surf.name === "mobile" ? fresh.storage.getItem("pct_tool_settings_v1") : null;
+    fresh.document.getElementById("resetLayoutBtn")?.click();
+    await fresh.drain();
+    const resetObservation = observeLayout();
+    resetObservation.persistenceObserved = surf.name === "desktop"
+      ? fresh.backend.getIpcCalls().filter((call) => call.cmd === "set_settings").length > writesBeforeReset
+      : fresh.storage.getItem("pct_tool_settings_v1") !== settingsBeforeReset;
+    recordA5(surf.name, "layout-reset-persists", resetObservation, layoutSpec(DEFAULT_CARD_ORDER, [], { requirePersistence: true }),
+      "benign_reset_layout", "card_layout_reset");
+  }
+
+  // Literal Infinity is invalid number-input syntax; test raw math and IPC directly.
+  const peopleError = "People must be a whole number (1 or more)";
+  const rawTipSpec = {
+    kind: "raw_math", expectRawOk: false, expectedRawError: peopleError, enforceNoInfiniteDisplay: true,
+  };
+  const mobileTipRaw = createMobilePureMathRunner(artifacts).runCalc("tip", null, 100, 15, Infinity);
+  recordA5("mobile_raw_math", "infinite-people", {
+    rawOk: mobileTipRaw.ok === true || mobileTipRaw.ok === "true",
+    rawDisplay: String(mobileTipRaw.error ?? ""), broken: false,
+  }, rawTipSpec, "adversarial_tip_input", "tip_raw_people_guard");
+  for (const surface of ["core", "ipc"]) {
+    const response = await rustBridge.call(surface, "tip_split", 100, 15, null, Infinity);
+    const raw = surface === "core" && response.ok ? response.result : response;
+    recordA5(surface === "core" ? "rust_core" : "rust_ipc", "infinite-people", {
+      rawOk: raw?.ok === true || raw?.ok === "true", rawDisplay: String(raw?.error ?? ""),
+      broken: Boolean(response.broken), brokenReason: response.reason,
+    }, { ...rawTipSpec, expectedRawError: surface === "core" ? peopleError : undefined },
+    "adversarial_tip_input", "tip_raw_people_guard");
+  }
+
   const orthogonality = auditFactorialOrthogonality(factorialMeta, [
     "sign",
     "currency_fmt",
@@ -3404,7 +3823,7 @@ async function runSliceA(artifacts, rustBridge, rng) {
 }
 
 /**
- * Slice B: 1,088 Unique Single-Turn + Metamorphic Items Across All 8 Calc Modes.
+ * Slice B: Non-golden single-turn and metamorphic items across all 9 calculator modes.
  * ZERO overlap with golden.json 2-arg input pairs.
  * Tests Raw Rust Core, Desktop Guarded UI, Mobile Raw Math, and Mobile Guarded UI,
  * with actual 2-pass per-surface replay and BOTH paired comparisons:
@@ -3424,10 +3843,11 @@ async function runSliceB(artifacts, rustBridge, mobileMath, rng, goldenPairSet) 
     if (goldenPairSet.has(`${keyA}|${keyB}`) || goldenPairSet.has(`${keyB}|${keyA}`)) {
       return false;
     }
-    const itemKey = `${item.calcId}|${item.mode || ""}|${keyA}|${keyB}`;
+    const itemKey = `${item.calcId}|${item.mode || ""}|${keyA}|${keyB}` +
+      (item.calcId === "tip" ? `|${encodeNumInput(item.c ?? 1)}` : "");
     if (seenItemKeys.has(itemKey)) return false;
     seenItemKeys.add(itemKey);
-    items.push({ ...item, id: `B-${items.length + 1}` });
+    items.push({ ...item, ...(item.calcId === "tip" ? { c: item.c ?? 1 } : {}), id: `B-${items.length + 1}` });
     return true;
   }
 
@@ -3441,6 +3861,7 @@ async function runSliceB(artifacts, rustBridge, mobileMath, rng, goldenPairSet) 
     { calcId: "markup", mode: null },
     { calcId: "tax", mode: "add" },
     { calcId: "tax", mode: "extract" },
+    { calcId: "tip", mode: null },
   ];
   const boundaryPairs = [
     [-0, 37.5],
@@ -3466,6 +3887,7 @@ async function runSliceB(artifacts, rustBridge, mobileMath, rng, goldenPairSet) 
         mode: tm.mode,
         a,
         b,
+        ...(tm.calcId === "tip" ? { c: 2 } : {}),
         a_regime: "boundary",
         b_regime: "boundary",
         subCategory: "targeted_boundary",
@@ -3473,7 +3895,12 @@ async function runSliceB(artifacts, rustBridge, mobileMath, rng, goldenPairSet) 
     }
   }
 
-  // 2) Orthogonal 8 x 4 x 4 x 6 seeded PRNG factorial = 768 unique items
+  for (const c of [0, 1.5, "1e309", -1]) {
+    addUniqueItem({ calcId: "tip", mode: null, a: 137.49, b: 17.25, c,
+      a_regime: "boundary", b_regime: "boundary", subCategory: "tip_people_boundary" });
+  }
+
+  // 2) Orthogonal 9 x 4 x 4 x 6 seeded PRNG factorial = 864 unique items.
   const aRegimes = ["tiny_pos", "standard_pos", "large_pos", "negative_val"];
   const bRegimes = ["small_val", "mid_val", "hundred_plus", "fractional_half"];
   const factorialMeta = [];
@@ -3504,6 +3931,7 @@ async function runSliceB(artifacts, rustBridge, mobileMath, rng, goldenPairSet) 
               mode: tm.mode,
               a,
               b,
+              ...(tm.calcId === "tip" ? { c: [1, 2, 3, 4, 8, 1][rep] } : {}),
               a_regime: ar,
               b_regime: br,
               subCategory: "orthogonal_prng",
@@ -3523,7 +3951,7 @@ async function runSliceB(artifacts, rustBridge, mobileMath, rng, goldenPairSet) 
   // 3) Metamorphic Invariant Pairs (100 pairs = 200 unique items)
   const metamorphicLinks = [];
   for (let i = 0; i < 100; i += 1) {
-    const kind = i % 4;
+    const kind = i % 5;
     if (kind === 0) {
       // Scale invariance: change(a, b) == change(k*a, k*b)
       const a = Number((10 + rng() * 500).toFixed(2));
@@ -3553,7 +3981,7 @@ async function runSliceB(artifacts, rustBridge, mobileMath, rng, goldenPairSet) 
       if (addOk && extOk) {
         metamorphicLinks.push({ kind: "tax_roundtrip", id1: `B-${items.length - 1}`, id2: `B-${items.length}`, net });
       }
-    } else {
+    } else if (kind === 3) {
       // Percent of total scaling invariance: percent(a, b) == percent(13*a, 13*b)
       const a = Number((5 + rng() * 200).toFixed(2));
       const b = Number((50 + rng() * 800).toFixed(2));
@@ -3561,6 +3989,16 @@ async function runSliceB(artifacts, rustBridge, mobileMath, rng, goldenPairSet) 
       const ok2 = addUniqueItem({ calcId: "percent", mode: null, a: Number((a * 13).toFixed(2)), b: Number((b * 13).toFixed(2)), subCategory: "metamorphic_scale" });
       if (ok1 && ok2) {
         metamorphicLinks.push({ kind: "scale_percent", id1: `B-${items.length - 1}`, id2: `B-${items.length}` });
+      }
+    } else {
+      // Scaling bill and people together preserves each person's share.
+      const bill = Number((20 + rng() * 900).toFixed(2));
+      const rate = Number((5 + rng() * 20).toFixed(2));
+      const people = [1, 2, 3, 4, 8][Math.floor(i / 5) % 5];
+      const ok1 = addUniqueItem({ calcId: "tip", mode: null, a: bill, b: rate, c: people, subCategory: "metamorphic_tip_scale" });
+      const ok2 = addUniqueItem({ calcId: "tip", mode: null, a: Number((bill * 4).toFixed(2)), b: rate, c: people * 4, subCategory: "metamorphic_tip_scale" });
+      if (ok1 && ok2) {
+        metamorphicLinks.push({ kind: "scale_tip", id1: `B-${items.length - 1}`, id2: `B-${items.length}` });
       }
     }
   }
@@ -3572,6 +4010,7 @@ async function runSliceB(artifacts, rustBridge, mobileMath, rng, goldenPairSet) 
       op: CALC_SPECS[it.calcId].bridgeOp,
       a: it.a,
       b: it.b,
+      c: it.c,
       mode: it.mode,
     }))
   );
@@ -3581,6 +4020,7 @@ async function runSliceB(artifacts, rustBridge, mobileMath, rng, goldenPairSet) 
       op: CALC_SPECS[it.calcId].bridgeOp,
       a: it.a,
       b: it.b,
+      c: it.c,
       mode: it.mode,
     }))
   );
@@ -3596,11 +4036,11 @@ async function runSliceB(artifacts, rustBridge, mobileMath, rng, goldenPairSet) 
 
   for (let i = 0; i < items.length; i += 1) {
     const it = items[i];
-    const oracle = computeReferenceOracle(it.calcId, it.mode, it.a, it.b);
+    const oracle = computeReferenceOracle(it.calcId, it.mode, it.a, it.b, it.c ?? 1);
 
     // 1. Mobile Raw Math (2-pass replay)
-    const mobMath1 = mobileMath.runCalc(it.calcId, it.mode, it.a, it.b);
-    const mobMath2 = mobileMath.runCalc(it.calcId, it.mode, it.a, it.b);
+    const mobMath1 = mobileMath.runCalc(it.calcId, it.mode, it.a, it.b, Number(it.c ?? 1));
+    const mobMath2 = mobileMath.runCalc(it.calcId, it.mode, it.a, it.b, Number(it.c ?? 1));
     const mobMathReplay = deepEqualObjectIs(mobMath1, mobMath2);
     const mobMathDisplay = mobMath1.ok === true || mobMath1.ok === "true"
       ? (mobMath1.label || mobMath1.formatted || mobMath1.copyText || JSON.stringify(mobMath1))
@@ -3619,14 +4059,16 @@ async function runSliceB(artifacts, rustBridge, mobileMath, rng, goldenPairSet) 
       kind: "raw_math",
       expectRawOk: oracle.raw.ok,
       expectedRawTokens: oracle.raw.formattedTokens || [],
+      errorCategory: oracle.raw.errorCategory,
+      expectedRawError: it.calcId === "tip" ? oracle.raw.error : undefined,
       requireReplay: true,
       enforceNoInfiniteDisplay: true,
     });
 
     // 2. Mobile Guarded UI (full unmodified script, 2-pass replay!)
-    const mobUi1 = await uiSetInputsAndEvaluate(mobileSandbox, it.calcId, it.mode, it.a, it.b);
+    const mobUi1 = await uiSetInputsAndEvaluate(mobileSandbox, it.calcId, it.mode, it.a, it.b, it.c);
     await uiSetInputsAndEvaluate(mobileSandbox, it.calcId, it.mode, "", "");
-    const mobUi2 = await uiSetInputsAndEvaluate(mobileSandbox, it.calcId, it.mode, it.a, it.b);
+    const mobUi2 = await uiSetInputsAndEvaluate(mobileSandbox, it.calcId, it.mode, it.a, it.b, it.c);
     const mobUiReplay = deepEqualObjectIs(mobUi1, mobUi2);
 
     const mobUiObs = {
@@ -3688,6 +4130,8 @@ async function runSliceB(artifacts, rustBridge, mobileMath, rng, goldenPairSet) 
       kind: "raw_math",
       expectRawOk: oracle.raw.ok,
       expectedRawTokens: oracle.raw.formattedTokens || [],
+      errorCategory: oracle.raw.errorCategory,
+      expectedRawError: it.calcId === "tip" ? oracle.raw.error : undefined,
       requireReplay: true,
       enforceNoInfiniteDisplay: false,
     });
@@ -3707,9 +4151,9 @@ async function runSliceB(artifacts, rustBridge, mobileMath, rng, goldenPairSet) 
       dskUiGraded = { broken: true, passed: false, outputLength: 0 };
       dskUiLenient = { broken: true, passed: false, outputLength: 0 };
     } else {
-      const d1 = await uiSetInputsAndEvaluate(desktopSandbox, it.calcId, it.mode, it.a, it.b);
+      const d1 = await uiSetInputsAndEvaluate(desktopSandbox, it.calcId, it.mode, it.a, it.b, it.c);
       await uiSetInputsAndEvaluate(desktopSandbox, it.calcId, it.mode, "", "");
-      const d2 = await uiSetInputsAndEvaluate(desktopSandbox, it.calcId, it.mode, it.a, it.b);
+      const d2 = await uiSetInputsAndEvaluate(desktopSandbox, it.calcId, it.mode, it.a, it.b, it.c);
       const dReplay = !d1.broken && !d2.broken && deepEqualObjectIs(d1, d2);
       dskUiObs = {
         id: `${it.id}-dsk-ui`,
@@ -3801,6 +4245,9 @@ async function runSliceB(artifacts, rustBridge, mobileMath, rng, goldenPairSet) 
       ok = r1.passed && r2.passed && r2.resultText.includes("-");
     } else if (link.kind === "tax_roundtrip") {
       ok = r1.passed && r2.passed && r2.resultText.includes(refFormatDecimal(link.net));
+    } else if (link.kind === "scale_tip") {
+      const each = (text) => String(text).match(/Each:\s*(-?[\d.]+)/)?.[1];
+      ok = r1.passed && r2.passed && each(r1.resultText) !== undefined && each(r1.resultText) === each(r2.resultText);
     }
     if (ok) metamorphicPassed += 1;
   }
@@ -4225,6 +4672,59 @@ async function runSliceE(artifacts, rustBridge, rng) {
   };
 }
 
+async function executeTipLayoutTurn(sandbox, turn) {
+  const doc = sandbox.document;
+  if (turn === 5) {
+    const result = await uiSetInputsAndEvaluate(sandbox, "tip", null, 120, 15, 3);
+    if (result.broken) return { broken: true, brokenReason: result.reason };
+    const tipCard = doc.getElementById("card-tip");
+    const toggle = tipCard?.querySelector("[aria-expanded]");
+    toggle?.click();
+    await sandbox.drain();
+    const collapsed = tipCard?.classList.contains("card-collapsed") &&
+      toggle?.getAttribute("aria-expanded") === "false";
+    doc.querySelector('.quick-nav .quick-link[data-calc="tip"]')?.click();
+    await sandbox.drain();
+    const expanded = !tipCard?.classList.contains("card-collapsed") && toggle?.getAttribute("aria-expanded") === "true";
+    return {
+      name: "turn5_tip_collapse_and_auto_expand",
+      passed: !result.isError && result.inputC === "3" &&
+        checkResultTokens(result.resultText, ["46.00", "138.00", "18.00"]) && collapsed && expanded && readCardLayout(sandbox).controlsMatch,
+      detail: `tip='${result.resultText}', collapsed=${collapsed}, expanded=${expanded}`,
+    };
+  }
+  const before = readCardLayout(sandbox);
+  const writesBefore = sandbox.surface === "desktop"
+    ? sandbox.backend.getIpcCalls().filter((call) => call.cmd === "set_settings").length : 0;
+  const settingsBefore = sandbox.surface === "mobile" ? sandbox.storage.getItem("pct_tool_settings_v1") : null;
+  let actionOccurred;
+  let expectedOrder;
+  if (turn === 6) {
+    actionOccurred = await dragFirstCardToEnd(sandbox);
+    expectedOrder = [...before.cardOrder.slice(1), before.cardOrder[0]];
+  } else {
+    const reset = doc.getElementById("resetLayoutBtn");
+    reset?.click();
+    await sandbox.drain();
+    actionOccurred = Boolean(reset);
+    expectedOrder = [...DEFAULT_CARD_ORDER];
+  }
+  const observation = {
+    ...readCardLayout(sandbox), persistedSettings: readPersistedSettings(sandbox), broken: false,
+    persistenceObserved: sandbox.surface === "desktop"
+      ? sandbox.backend.getIpcCalls().filter((call) => call.cmd === "set_settings").length > writesBefore
+      : sandbox.storage.getItem("pct_tool_settings_v1") !== settingsBefore,
+  };
+  const graded = gradeObservation(observation, {
+    kind: "layout_guard", cardOrder: expectedOrder, collapsedCards: [], requirePersistence: true,
+  });
+  return {
+    name: turn === 6 ? "turn6_pointer_drag_persists" : "turn7_reset_layout_persists",
+    passed: actionOccurred && graded.passed,
+    detail: JSON.stringify(observation),
+  };
+}
+
 async function executeMultiTurnTranscript({ txId, family, surface, persona, convLen, tactic, artifacts, rustBridge, rng }) {
   const turns = [];
   const recordTurn = (name, passed, detail, lenientPassed = passed) => {
@@ -4295,21 +4795,10 @@ async function executeMultiTurnTranscript({ txId, family, surface, persona, conv
       recordTurn("turn4_toggle_persist", persistedOk, `checked=${toggle.checked}, backend=${sandbox.backend.getSettings().checkUpdatesOnStartup}`);
 
       // Optional Turns 5..7 matching exact convLen
-      if (convLen >= 5) {
-        const resT5 = await uiSetInputsAndEvaluate(sandbox, "percent", null, 25, 200);
-        if (resT5.broken) return { broken: true, brokenReason: resT5.reason, turns };
-        recordTurn("turn5_post_race_calc", !resT5.isError && resT5.resultText.includes("12.50%"), resT5.resultText);
-      }
-      if (convLen >= 6) {
-        const resT6 = await uiSetInputsAndEvaluate(sandbox, "tax", "extract", 120, 20);
-        if (resT6.broken) return { broken: true, brokenReason: resT6.reason, turns };
-        recordTurn("turn6_tax_extract", !resT6.isError && resT6.resultText.includes("100.00"), resT6.resultText);
-      }
-      if (convLen >= 7) {
-        doc.getElementById("resetTaxBtn")?.click();
-        await sandbox.drain();
-        const cleared = doc.getElementById("taxAmount").value === "" && doc.getElementById("taxRate").value === "";
-        recordTurn("turn7_reset_clean", cleared, `taxAmount='${doc.getElementById("taxAmount").value}'`);
+      for (let turn = 5; turn <= convLen; turn += 1) {
+        const result = await executeTipLayoutTurn(sandbox, turn);
+        if (result.broken) return { broken: true, brokenReason: result.brokenReason, turns };
+        recordTurn(result.name, result.passed, result.detail);
       }
     } else if (family === "paste_swap_tax_overflow") {
       // Turn 2: Pre-seed valid -> paste adversarial hex/Infinity -> MUST preserve value
@@ -4457,26 +4946,26 @@ async function executeMultiTurnTranscript({ txId, family, surface, persona, conv
       }
     } else {
       // family === "updates_security_and_sw" (Desktop IPC updates & release allowlist)
-      // Turn 2: Remote latestVersion OLDER (2.1.1) while running 2.2.1 -> MUST say running v2.2.1!
+      // Turn 2: Remote latestVersion OLDER (2.1.1) while running 2.3.0 -> MUST say running v2.3.0!
       sandbox.backend.setUpdateResponse({
         ok: true,
         updateAvailable: false,
-        currentVersion: "2.2.1",
+        currentVersion: "2.3.0",
         latestVersion: "2.1.1",
         releaseUrl: "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.1.1",
       });
       doc.getElementById("checkUpdatesNowBtn").click();
       await sandbox.drain();
       const status2 = doc.getElementById("updateStatusText").textContent;
-      recordTurn("turn2_uptodate_shows_running_version", status2.includes("2.2.1") && !status2.includes("2.1.1"), status2);
+      recordTurn("turn2_uptodate_shows_running_version", status2.includes("2.3.0") && !status2.includes("2.1.1"), status2);
 
       // Turn 3: Newer release available -> banner visible & release URL opened only if prefix matches
       sandbox.backend.setUpdateResponse({
         ok: true,
         updateAvailable: true,
-        currentVersion: "2.2.1",
-        latestVersion: "2.3.0",
-        releaseUrl: "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.3.0",
+        currentVersion: "2.3.0",
+        latestVersion: "2.4.0",
+        releaseUrl: "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/tag/v2.4.0",
       });
       doc.getElementById("checkUpdatesNowBtn").click();
       await sandbox.drain();
@@ -4484,7 +4973,7 @@ async function executeMultiTurnTranscript({ txId, family, surface, persona, conv
       doc.getElementById("openReleasePageBtn").click();
       await sandbox.drain();
       const opened = sandbox.backend.getOpenedUrls();
-      recordTurn("turn3_update_available_and_open_safe_url", status3.includes("2.3.0") && opened.some((u) => u.startsWith("https://github.com/CipherVaults/Percentage-Calculator-Tool/releases")), `status='${status3}', opened=${opened.length}`);
+      recordTurn("turn3_update_available_and_open_safe_url", status3.includes("2.4.0") && opened.some((u) => u.startsWith("https://github.com/CipherVaults/Percentage-Calculator-Tool/releases")), `status='${status3}', opened=${opened.length}`);
 
       // Turn 4: Spoofed release URL blocked by open_release_page IPC!
       let spoofBlocked = false;
@@ -4554,17 +5043,9 @@ async function executeMultiTurnTranscript({ txId, family, surface, persona, conv
     mSandbox.sw.dispatchControllerChange();
     recordTurn("turn4_sw_controllerchange_single_reload", mSandbox.getReloadCount() === 1, `reloads=${mSandbox.getReloadCount()}`);
 
-    if (convLen >= 5) {
-      const m5 = await uiSetInputsAndEvaluate(mSandbox, "percent", null, 25, 200);
-      recordTurn("turn5_post_sw_calc", !m5.isError && m5.resultText.includes("12.50%"), m5.resultText);
-    }
-    if (convLen >= 6) {
-      const m6 = await uiSetInputsAndEvaluate(mSandbox, "tax", "extract", 120, 20);
-      recordTurn("turn6_tax_extract", !m6.isError && m6.resultText.includes("100.00"), m6.resultText);
-    }
-    if (convLen >= 7) {
-      mDoc.getElementById("resetTaxBtn")?.click();
-      recordTurn("turn7_reset_clean", mDoc.getElementById("taxAmount").value === "", mDoc.getElementById("taxAmount").value);
+    for (let turn = 5; turn <= convLen; turn += 1) {
+      const result = await executeTipLayoutTurn(mSandbox, turn);
+      recordTurn(result.name, result.passed, result.detail);
     }
   } else if (family === "paste_swap_tax_overflow") {
     const elA = mDoc.getElementById("changeOrig");
@@ -4681,7 +5162,7 @@ async function executeMultiTurnTranscript({ txId, family, surface, persona, conv
     }
   } else {
     // updates_security_and_sw on Mobile
-    // Turn 2: Older remote tag v2.1.1 -> must report running v2.2.1!
+    // Turn 2: Older remote tag v2.1.1 -> must report running v2.3.0!
     const mPayload2 = {
       tag_name: "v2.1.1",
       draft: false,
@@ -4698,7 +5179,7 @@ async function executeMultiTurnTranscript({ txId, family, surface, persona, conv
     mDoc.getElementById("checkUpdatesNowBtn").click();
     await mSandbox.drain();
     const ms2 = mDoc.getElementById("updateStatusText").textContent;
-    recordTurn("turn2_uptodate_shows_running_version", ms2.includes("2.2.1") && !ms2.includes("2.1.1"), ms2);
+    recordTurn("turn2_uptodate_shows_running_version", ms2.includes("2.3.0") && !ms2.includes("2.1.1"), ms2);
 
     // Turn 3: Draft or prerelease or spoofed html_url MUST be ignored / rejected safely
     const mPayload3 = {

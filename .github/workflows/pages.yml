@@ -142,7 +142,26 @@ jobs:
             assert.strictEqual(taxNegExt.taxText, "-4.76");
             assert.strictEqual(ctx.calcTax(100, -100, "extract").error, "Tax rate cannot be -100%");
 
-            console.log(`Pages pre-deploy verified (${cases.length} golden + markup/margin + tax + manifest + LF + CSP hashes OK).`);
+            const tipOk = ctx.calcTipSplit(100, 15, 4);
+            assert.strictEqual(tipOk.ok, "true");
+            assert.strictEqual(tipOk.tipText, "15.00");
+            assert.strictEqual(tipOk.totalText, "115.00");
+            assert.strictEqual(tipOk.perPersonText, "28.75");
+            assert.strictEqual(tipOk.label, "Each: 28.75<br>Total: 115.00 \u00b7 Tip: 15.00");
+            assert.strictEqual(tipOk.liveResult, "Each: 28.75 \u00b7 Total: 115.00");
+            assert.strictEqual(tipOk.copyText, "Each: 28.75\nTotal: 115.00 \u00b7 Tip: 15.00");
+            const tipZero = ctx.calcTipSplit(80, 0, 2);
+            assert.strictEqual(tipZero.ok, "true");
+            assert.strictEqual(tipZero.tipText, "0.00");
+            assert.strictEqual(tipZero.totalText, "80.00");
+            assert.strictEqual(tipZero.perPersonText, "40.00");
+            assert.strictEqual(ctx.calcTipSplit(-10, 15, 2).error, "Bill amount cannot be negative");
+            assert.strictEqual(ctx.calcTipSplit(100, -5, 2).error, "Tip % cannot be negative");
+            assert.strictEqual(ctx.calcTipSplit(100, 15, 0).error, "People must be a whole number (1 or more)");
+            assert.strictEqual(ctx.calcTipSplit(100, 15, 1.5).error, "People must be a whole number (1 or more)");
+            assert.strictEqual(ctx.calcTipSplit(100, 15, Infinity).error, "People must be a whole number (1 or more)");
+
+            console.log(`Pages pre-deploy verified (${cases.length} golden + markup/margin + tax + tip split + manifest + LF + CSP hashes OK).`);
           '
       - name: Setup Pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5

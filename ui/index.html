@@ -34,263 +34,364 @@
   </div>
 
   <nav class="quick-nav" aria-label="Jump to calculator">
-    <a class="quick-link" href="#card-change">change</a>
-    <a class="quick-link" href="#card-percent">% of total</a>
-    <a class="quick-link" href="#card-what">portion</a>
-    <a class="quick-link" href="#card-discount">discount</a>
-    <a class="quick-link" href="#card-base">original</a>
-    <a class="quick-link" href="#card-markup">markup &amp; margin</a>
-    <a class="quick-link" href="#card-tax">tax / vat</a>
+    <a class="quick-link" href="#card-change" data-calc="change">change</a>
+    <a class="quick-link" href="#card-percent" data-calc="percent">% of total</a>
+    <a class="quick-link" href="#card-what" data-calc="what">portion</a>
+    <a class="quick-link" href="#card-discount" data-calc="discount">discount</a>
+    <a class="quick-link" href="#card-base" data-calc="base">original</a>
+    <a class="quick-link" href="#card-markup" data-calc="markup">markup &amp; margin</a>
+    <a class="quick-link" href="#card-tax" data-calc="tax">tax / vat</a>
+    <a class="quick-link" href="#card-tip" data-calc="tip">tip &amp; split</a>
     <a class="quick-link" href="#historySection">history</a>
   </nav>
 
-  <div class="calc-section" id="card-change">
-    <div class="calc-grid">
-      <div class="left-panel">
-        <div class="section-title">Percentage Change</div>
-        <div class="section-subtitle">Shows how much a value increased or decreased relative to the original.</div>
-
-        <div class="input-row">
-          <label for="changeOrig">Original value</label>
-          <input type="number" id="changeOrig" placeholder="e.g., 150" step="any">
+  <div id="cardsContainer">
+    <div class="calc-section" id="card-change" data-calc="change">
+      <div class="calc-card-header">
+        <button class="drag-handle" type="button" aria-label="Drag to reorder Percentage Change" title="Drag to reorder">⠿</button>
+        <div class="calc-card-heading">
+          <div class="section-title">Percentage Change</div>
+          <div class="section-subtitle">Shows how much a value increased or decreased relative to the original.</div>
         </div>
-        <div class="swap-row">
-          <button class="swap-btn" id="swapChangeBtn" type="button" title="Swap original and new values">⇅ swap values</button>
-        </div>
-        <div class="input-row">
-          <label for="changeNew">New value</label>
-          <input type="number" id="changeNew" placeholder="e.g., 180" step="any">
-        </div>
-
-        <div class="button-group">
-          <button class="calc-btn" id="calcChangeBtn" type="button">calculate</button>
-          <button class="reset-btn" id="resetChangeBtn" type="button">clear</button>
-          <button class="copy-btn" id="copyChangeBtn" type="button">copy</button>
-        </div>
-
-        <div class="result" id="changeResult">—</div>
+        <button class="collapse-btn" type="button" aria-expanded="true" aria-controls="card-change-body">[ − ]</button>
       </div>
+      <div class="calc-card-body" id="card-change-body">
+        <div class="calc-grid">
+          <div class="left-panel">
+            <div class="input-row">
+              <label for="changeOrig">Original value</label>
+              <input type="number" id="changeOrig" placeholder="e.g., 150" step="any">
+            </div>
+            <div class="swap-row">
+              <button class="swap-btn" id="swapChangeBtn" type="button" title="Swap original and new values">⇅ swap values</button>
+            </div>
+            <div class="input-row">
+              <label for="changeNew">New value</label>
+              <input type="number" id="changeNew" placeholder="e.g., 180" step="any">
+            </div>
 
-      <div class="right-panel">
-        <div class="formula-title">live formula</div>
-        <div class="live-formula" id="changeLiveFormula">((new − original) / original) × 100</div>
-        <div class="live-result" id="changeLiveResult">→ —</div>
-      </div>
-    </div>
-  </div>
+            <div class="button-group">
+              <button class="calc-btn" id="calcChangeBtn" type="button">calculate</button>
+              <button class="reset-btn" id="resetChangeBtn" type="button">clear</button>
+              <button class="copy-btn" id="copyChangeBtn" type="button">copy</button>
+            </div>
 
-  <div class="calc-section" id="card-percent">
-    <div class="calc-grid">
-      <div class="left-panel">
-        <div class="section-title">Percentage of Total</div>
-        <div class="section-subtitle">Finds what percentage one number is of another.</div>
+            <div class="result" id="changeResult">—</div>
+          </div>
 
-        <div class="input-row">
-          <label for="isWhatX">X (part)</label>
-          <input type="number" id="isWhatX" placeholder="e.g., 50" step="any">
-        </div>
-        <div class="swap-row">
-          <button class="swap-btn" id="swapPercentBtn" type="button" title="Swap X and Y values">⇅ swap values</button>
-        </div>
-        <div class="input-row">
-          <label for="isWhatY">Y (total)</label>
-          <input type="number" id="isWhatY" placeholder="e.g., 200" step="any">
-        </div>
-
-        <div class="button-group">
-          <button class="calc-btn" id="calcPercentBtn" type="button">calculate</button>
-          <button class="reset-btn" id="resetPercentBtn" type="button">clear</button>
-          <button class="copy-btn" id="copyPercentBtn" type="button">copy</button>
-        </div>
-
-        <div class="result" id="percentResult">—</div>
-      </div>
-
-      <div class="right-panel">
-        <div class="formula-title">live formula</div>
-        <div class="live-formula" id="percentLiveFormula">(X / Y) × 100</div>
-        <div class="live-result" id="percentLiveResult">→ —</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="calc-section" id="card-what">
-    <div class="calc-grid">
-      <div class="left-panel">
-        <div class="section-title">Calculate Percentage</div>
-        <div class="section-subtitle">Calculates a percentage portion of a number.</div>
-
-        <div class="input-row">
-          <label for="whatX">X (percent)</label>
-          <input type="number" id="whatX" placeholder="e.g., 20" step="any">
-        </div>
-        <div class="swap-row">
-          <button class="swap-btn" id="swapWhatBtn" type="button" title="Swap X and Y values">⇅ swap values</button>
-        </div>
-        <div class="input-row">
-          <label for="whatY">Y (number)</label>
-          <input type="number" id="whatY" placeholder="e.g., 500" step="any">
-        </div>
-
-        <div class="button-group">
-          <button class="calc-btn" id="calcWhatBtn" type="button">calculate</button>
-          <button class="reset-btn" id="resetWhatBtn" type="button">clear</button>
-          <button class="copy-btn" id="copyWhatBtn" type="button">copy</button>
-        </div>
-
-        <div class="result" id="whatResult">—</div>
-      </div>
-
-      <div class="right-panel">
-        <div class="formula-title">live formula</div>
-        <div class="live-formula" id="whatLiveFormula">(X / 100) × Y</div>
-        <div class="live-result" id="whatLiveResult">→ —</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="calc-section" id="card-discount">
-    <div class="calc-grid">
-      <div class="left-panel">
-        <div class="section-title">Discount</div>
-        <div class="section-subtitle">Calculates final price and savings after a percentage discount.</div>
-
-        <div class="input-row">
-          <label for="discountPrice">Original price</label>
-          <input type="number" id="discountPrice" placeholder="e.g., 79.99" step="any">
-        </div>
-        <div class="swap-row">
-          <button class="swap-btn" id="swapDiscountBtn" type="button" title="Swap price and discount values">⇅ swap values</button>
-        </div>
-        <div class="input-row">
-          <label for="discountPercent">Discount (%)</label>
-          <input type="number" id="discountPercent" placeholder="e.g., 20" step="any">
-        </div>
-
-        <div class="button-group">
-          <button class="calc-btn" id="calcDiscountBtn" type="button">calculate</button>
-          <button class="reset-btn" id="resetDiscountBtn" type="button">clear</button>
-          <button class="copy-btn" id="copyDiscountBtn" type="button">copy</button>
-        </div>
-
-        <div class="result" id="discountResult">—</div>
-      </div>
-
-      <div class="right-panel">
-        <div class="formula-title">live formula</div>
-        <div class="live-formula" id="discountLiveFormula">final = price × (1 − discount/100)<br>saved = price × discount/100</div>
-        <div class="live-result" id="discountLiveResult">→ —</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="calc-section" id="card-base">
-    <div class="calc-grid">
-      <div class="left-panel">
-        <div class="section-title">Find Original Value</div>
-        <div class="section-subtitle">Finds the full number when you know a value and its percentage.</div>
-
-        <div class="input-row">
-          <label for="baseX">X (value)</label>
-          <input type="number" id="baseX" placeholder="e.g., 50" step="any">
-        </div>
-        <div class="swap-row">
-          <button class="swap-btn" id="swapBaseBtn" type="button" title="Swap X and Y values">⇅ swap values</button>
-        </div>
-        <div class="input-row">
-          <label for="baseY">Y (percent)</label>
-          <input type="number" id="baseY" placeholder="e.g., 25" step="any">
-        </div>
-
-        <div class="button-group">
-          <button class="calc-btn" id="calcBaseBtn" type="button">calculate</button>
-          <button class="reset-btn" id="resetBaseBtn" type="button">clear</button>
-          <button class="copy-btn" id="copyBaseBtn" type="button">copy</button>
-        </div>
-
-        <div class="result" id="baseResult">—</div>
-      </div>
-
-      <div class="right-panel">
-        <div class="formula-title">live formula</div>
-        <div class="live-formula" id="baseLiveFormula">X / (Y / 100)</div>
-        <div class="live-result" id="baseLiveResult">→ —</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="calc-section" id="card-markup">
-    <div class="calc-grid">
-      <div class="left-panel">
-        <div class="section-title">Markup &amp; Profit Margin</div>
-        <div class="section-subtitle">Calculates net profit, markup % on cost, and gross margin % on selling price.</div>
-
-        <div class="input-row">
-          <label for="markupCost">Cost</label>
-          <input type="number" id="markupCost" placeholder="e.g., 80" step="any">
-        </div>
-        <div class="swap-row">
-          <button class="swap-btn" id="swapMarkupBtn" type="button" title="Swap cost and selling price">⇅ swap values</button>
-        </div>
-        <div class="input-row">
-          <label for="markupPrice">Selling price</label>
-          <input type="number" id="markupPrice" placeholder="e.g., 100" step="any">
-        </div>
-
-        <div class="button-group">
-          <button class="calc-btn" id="calcMarkupBtn" type="button">calculate</button>
-          <button class="reset-btn" id="resetMarkupBtn" type="button">clear</button>
-          <button class="copy-btn" id="copyMarkupBtn" type="button">copy</button>
-        </div>
-
-        <div class="result" id="markupResult">—</div>
-      </div>
-
-      <div class="right-panel">
-        <div class="formula-title">live formula</div>
-        <div class="live-formula" id="markupLiveFormula">profit = price − cost<br>markup = (profit / cost) × 100<br>margin = (profit / price) × 100</div>
-        <div class="live-result" id="markupLiveResult">→ —</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="calc-section" id="card-tax">
-    <div class="calc-grid">
-      <div class="left-panel">
-        <div class="section-title-row">
-          <div class="section-title">Reverse Tax / VAT</div>
-          <div class="mode-toggle" role="group" aria-label="Tax calculation mode">
-            <button class="mode-btn active" id="taxModeAddBtn" data-mode="add" type="button">add tax</button>
-            <button class="mode-btn" id="taxModeExtractBtn" data-mode="extract" type="button">extract tax</button>
+          <div class="right-panel">
+            <div class="formula-title">live formula</div>
+            <div class="live-formula" id="changeLiveFormula">((new − original) / original) × 100</div>
+            <div class="live-result" id="changeLiveResult">→ —</div>
           </div>
         </div>
-        <div class="section-subtitle" id="taxSubtitle">Adds a percentage tax/VAT to a net amount or extracts tax from a tax-inclusive total.</div>
-
-        <div class="input-row">
-          <label for="taxAmount" id="taxAmountLabel">Net amount (before tax)</label>
-          <input type="number" id="taxAmount" placeholder="e.g., 100" step="any">
-        </div>
-        <div class="swap-row">
-          <button class="swap-btn" id="swapTaxBtn" type="button" title="Swap amount and tax rate">⇅ swap values</button>
-        </div>
-        <div class="input-row">
-          <label for="taxRate">Tax / VAT rate (%)</label>
-          <input type="number" id="taxRate" placeholder="e.g., 15" step="any">
-        </div>
-
-        <div class="button-group">
-          <button class="calc-btn" id="calcTaxBtn" type="button">calculate</button>
-          <button class="reset-btn" id="resetTaxBtn" type="button">clear</button>
-          <button class="copy-btn" id="copyTaxBtn" type="button">copy</button>
-        </div>
-
-        <div class="result" id="taxResult">—</div>
       </div>
+    </div>
 
-      <div class="right-panel">
-        <div class="formula-title">live formula</div>
-        <div class="live-formula" id="taxLiveFormula">tax = net × (rate / 100)<br>total = net + tax</div>
-        <div class="live-result" id="taxLiveResult">→ —</div>
+    <div class="calc-section" id="card-percent" data-calc="percent">
+      <div class="calc-card-header">
+        <button class="drag-handle" type="button" aria-label="Drag to reorder Percentage of Total" title="Drag to reorder">⠿</button>
+        <div class="calc-card-heading">
+          <div class="section-title">Percentage of Total</div>
+          <div class="section-subtitle">Finds what percentage one number is of another.</div>
+        </div>
+        <button class="collapse-btn" type="button" aria-expanded="true" aria-controls="card-percent-body">[ − ]</button>
+      </div>
+      <div class="calc-card-body" id="card-percent-body">
+        <div class="calc-grid">
+          <div class="left-panel">
+            <div class="input-row">
+              <label for="isWhatX">X (part)</label>
+              <input type="number" id="isWhatX" placeholder="e.g., 50" step="any">
+            </div>
+            <div class="swap-row">
+              <button class="swap-btn" id="swapPercentBtn" type="button" title="Swap X and Y values">⇅ swap values</button>
+            </div>
+            <div class="input-row">
+              <label for="isWhatY">Y (total)</label>
+              <input type="number" id="isWhatY" placeholder="e.g., 200" step="any">
+            </div>
+
+            <div class="button-group">
+              <button class="calc-btn" id="calcPercentBtn" type="button">calculate</button>
+              <button class="reset-btn" id="resetPercentBtn" type="button">clear</button>
+              <button class="copy-btn" id="copyPercentBtn" type="button">copy</button>
+            </div>
+
+            <div class="result" id="percentResult">—</div>
+          </div>
+
+          <div class="right-panel">
+            <div class="formula-title">live formula</div>
+            <div class="live-formula" id="percentLiveFormula">(X / Y) × 100</div>
+            <div class="live-result" id="percentLiveResult">→ —</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="calc-section" id="card-what" data-calc="what">
+      <div class="calc-card-header">
+        <button class="drag-handle" type="button" aria-label="Drag to reorder Calculate Percentage" title="Drag to reorder">⠿</button>
+        <div class="calc-card-heading">
+          <div class="section-title">Calculate Percentage</div>
+          <div class="section-subtitle">Calculates a percentage portion of a number.</div>
+        </div>
+        <button class="collapse-btn" type="button" aria-expanded="true" aria-controls="card-what-body">[ − ]</button>
+      </div>
+      <div class="calc-card-body" id="card-what-body">
+        <div class="calc-grid">
+          <div class="left-panel">
+            <div class="input-row">
+              <label for="whatX">X (percent)</label>
+              <input type="number" id="whatX" placeholder="e.g., 20" step="any">
+            </div>
+            <div class="swap-row">
+              <button class="swap-btn" id="swapWhatBtn" type="button" title="Swap X and Y values">⇅ swap values</button>
+            </div>
+            <div class="input-row">
+              <label for="whatY">Y (number)</label>
+              <input type="number" id="whatY" placeholder="e.g., 500" step="any">
+            </div>
+
+            <div class="button-group">
+              <button class="calc-btn" id="calcWhatBtn" type="button">calculate</button>
+              <button class="reset-btn" id="resetWhatBtn" type="button">clear</button>
+              <button class="copy-btn" id="copyWhatBtn" type="button">copy</button>
+            </div>
+
+            <div class="result" id="whatResult">—</div>
+          </div>
+
+          <div class="right-panel">
+            <div class="formula-title">live formula</div>
+            <div class="live-formula" id="whatLiveFormula">(X / 100) × Y</div>
+            <div class="live-result" id="whatLiveResult">→ —</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="calc-section" id="card-discount" data-calc="discount">
+      <div class="calc-card-header">
+        <button class="drag-handle" type="button" aria-label="Drag to reorder Discount" title="Drag to reorder">⠿</button>
+        <div class="calc-card-heading">
+          <div class="section-title">Discount</div>
+          <div class="section-subtitle">Calculates final price and savings after a percentage discount.</div>
+        </div>
+        <button class="collapse-btn" type="button" aria-expanded="true" aria-controls="card-discount-body">[ − ]</button>
+      </div>
+      <div class="calc-card-body" id="card-discount-body">
+        <div class="calc-grid">
+          <div class="left-panel">
+            <div class="input-row">
+              <label for="discountPrice">Original price</label>
+              <input type="number" id="discountPrice" placeholder="e.g., 79.99" step="any">
+            </div>
+            <div class="swap-row">
+              <button class="swap-btn" id="swapDiscountBtn" type="button" title="Swap price and discount values">⇅ swap values</button>
+            </div>
+            <div class="input-row">
+              <label for="discountPercent">Discount (%)</label>
+              <input type="number" id="discountPercent" placeholder="e.g., 20" step="any">
+            </div>
+
+            <div class="button-group">
+              <button class="calc-btn" id="calcDiscountBtn" type="button">calculate</button>
+              <button class="reset-btn" id="resetDiscountBtn" type="button">clear</button>
+              <button class="copy-btn" id="copyDiscountBtn" type="button">copy</button>
+            </div>
+
+            <div class="result" id="discountResult">—</div>
+          </div>
+
+          <div class="right-panel">
+            <div class="formula-title">live formula</div>
+            <div class="live-formula" id="discountLiveFormula">final = price × (1 − discount/100)<br>saved = price × discount/100</div>
+            <div class="live-result" id="discountLiveResult">→ —</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="calc-section" id="card-base" data-calc="base">
+      <div class="calc-card-header">
+        <button class="drag-handle" type="button" aria-label="Drag to reorder Find Original Value" title="Drag to reorder">⠿</button>
+        <div class="calc-card-heading">
+          <div class="section-title">Find Original Value</div>
+          <div class="section-subtitle">Finds the full number when you know a value and its percentage.</div>
+        </div>
+        <button class="collapse-btn" type="button" aria-expanded="true" aria-controls="card-base-body">[ − ]</button>
+      </div>
+      <div class="calc-card-body" id="card-base-body">
+        <div class="calc-grid">
+          <div class="left-panel">
+            <div class="input-row">
+              <label for="baseX">X (value)</label>
+              <input type="number" id="baseX" placeholder="e.g., 50" step="any">
+            </div>
+            <div class="swap-row">
+              <button class="swap-btn" id="swapBaseBtn" type="button" title="Swap X and Y values">⇅ swap values</button>
+            </div>
+            <div class="input-row">
+              <label for="baseY">Y (percent)</label>
+              <input type="number" id="baseY" placeholder="e.g., 25" step="any">
+            </div>
+
+            <div class="button-group">
+              <button class="calc-btn" id="calcBaseBtn" type="button">calculate</button>
+              <button class="reset-btn" id="resetBaseBtn" type="button">clear</button>
+              <button class="copy-btn" id="copyBaseBtn" type="button">copy</button>
+            </div>
+
+            <div class="result" id="baseResult">—</div>
+          </div>
+
+          <div class="right-panel">
+            <div class="formula-title">live formula</div>
+            <div class="live-formula" id="baseLiveFormula">X / (Y / 100)</div>
+            <div class="live-result" id="baseLiveResult">→ —</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="calc-section" id="card-markup" data-calc="markup">
+      <div class="calc-card-header">
+        <button class="drag-handle" type="button" aria-label="Drag to reorder Markup &amp; Profit Margin" title="Drag to reorder">⠿</button>
+        <div class="calc-card-heading">
+          <div class="section-title">Markup &amp; Profit Margin</div>
+          <div class="section-subtitle">Calculates net profit, markup % on cost, and gross margin % on selling price.</div>
+        </div>
+        <button class="collapse-btn" type="button" aria-expanded="true" aria-controls="card-markup-body">[ − ]</button>
+      </div>
+      <div class="calc-card-body" id="card-markup-body">
+        <div class="calc-grid">
+          <div class="left-panel">
+            <div class="input-row">
+              <label for="markupCost">Cost</label>
+              <input type="number" id="markupCost" placeholder="e.g., 80" step="any">
+            </div>
+            <div class="swap-row">
+              <button class="swap-btn" id="swapMarkupBtn" type="button" title="Swap cost and selling price">⇅ swap values</button>
+            </div>
+            <div class="input-row">
+              <label for="markupPrice">Selling price</label>
+              <input type="number" id="markupPrice" placeholder="e.g., 100" step="any">
+            </div>
+
+            <div class="button-group">
+              <button class="calc-btn" id="calcMarkupBtn" type="button">calculate</button>
+              <button class="reset-btn" id="resetMarkupBtn" type="button">clear</button>
+              <button class="copy-btn" id="copyMarkupBtn" type="button">copy</button>
+            </div>
+
+            <div class="result" id="markupResult">—</div>
+          </div>
+
+          <div class="right-panel">
+            <div class="formula-title">live formula</div>
+            <div class="live-formula" id="markupLiveFormula">profit = price − cost<br>markup = (profit / cost) × 100<br>margin = (profit / price) × 100</div>
+            <div class="live-result" id="markupLiveResult">→ —</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="calc-section" id="card-tax" data-calc="tax">
+      <div class="calc-card-header">
+        <button class="drag-handle" type="button" aria-label="Drag to reorder Reverse Tax / VAT" title="Drag to reorder">⠿</button>
+        <div class="calc-card-heading">
+          <div class="section-title-row">
+            <div class="section-title">Reverse Tax / VAT</div>
+            <div class="mode-toggle" role="group" aria-label="Tax calculation mode">
+              <button class="mode-btn active" id="taxModeAddBtn" data-mode="add" type="button">add tax</button>
+              <button class="mode-btn" id="taxModeExtractBtn" data-mode="extract" type="button">extract tax</button>
+            </div>
+          </div>
+          <div class="section-subtitle" id="taxSubtitle">Adds a percentage tax/VAT to a net amount or extracts tax from a tax-inclusive total.</div>
+        </div>
+        <button class="collapse-btn" type="button" aria-expanded="true" aria-controls="card-tax-body">[ − ]</button>
+      </div>
+      <div class="calc-card-body" id="card-tax-body">
+        <div class="calc-grid">
+          <div class="left-panel">
+            <div class="input-row">
+              <label for="taxAmount" id="taxAmountLabel">Net amount (before tax)</label>
+              <input type="number" id="taxAmount" placeholder="e.g., 100" step="any">
+            </div>
+            <div class="swap-row">
+              <button class="swap-btn" id="swapTaxBtn" type="button" title="Swap amount and tax rate">⇅ swap values</button>
+            </div>
+            <div class="input-row">
+              <label for="taxRate">Tax / VAT rate (%)</label>
+              <input type="number" id="taxRate" placeholder="e.g., 15" step="any">
+            </div>
+
+            <div class="button-group">
+              <button class="calc-btn" id="calcTaxBtn" type="button">calculate</button>
+              <button class="reset-btn" id="resetTaxBtn" type="button">clear</button>
+              <button class="copy-btn" id="copyTaxBtn" type="button">copy</button>
+            </div>
+
+            <div class="result" id="taxResult">—</div>
+          </div>
+
+          <div class="right-panel">
+            <div class="formula-title">live formula</div>
+            <div class="live-formula" id="taxLiveFormula">tax = net × (rate / 100)<br>total = net + tax</div>
+            <div class="live-result" id="taxLiveResult">→ —</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="calc-section" id="card-tip" data-calc="tip">
+      <div class="calc-card-header">
+        <button class="drag-handle" type="button" aria-label="Drag to reorder Tip &amp; Bill Split" title="Drag to reorder">⠿</button>
+        <div class="calc-card-heading">
+          <div class="section-title">Tip &amp; Bill Split</div>
+          <div class="section-subtitle">Add a tip and split the total bill evenly between people.</div>
+        </div>
+        <button class="collapse-btn" type="button" aria-expanded="true" aria-controls="card-tip-body">[ − ]</button>
+      </div>
+      <div class="calc-card-body" id="card-tip-body">
+        <div class="calc-grid">
+          <div class="left-panel">
+            <div class="input-row">
+              <label for="tipBill">Bill amount</label>
+              <input type="number" id="tipBill" placeholder="e.g., 100" step="any">
+            </div>
+            <div class="swap-row">
+              <button class="swap-btn" id="swapTipBtn" type="button" title="Swap bill amount and tip percentage">⇅ swap values</button>
+            </div>
+            <div class="input-row">
+              <label for="tipPercent">Tip %</label>
+              <input type="number" id="tipPercent" placeholder="e.g., 20" step="any">
+            </div>
+            <div class="preset-row" role="group" aria-label="Tip percentage presets">
+              <button class="preset-btn" type="button" data-tip="10">10%</button>
+              <button class="preset-btn" type="button" data-tip="15">15%</button>
+              <button class="preset-btn" type="button" data-tip="18">18%</button>
+              <button class="preset-btn" type="button" data-tip="20">20%</button>
+            </div>
+            <div class="input-row">
+              <label for="tipPeople">People count</label>
+              <input type="number" id="tipPeople" step="1" min="1" value="1">
+            </div>
+            <div class="button-group">
+              <button class="calc-btn" id="calcTipBtn" type="button">calculate</button>
+              <button class="reset-btn" id="resetTipBtn" type="button">clear</button>
+              <button class="copy-btn" id="copyTipBtn" type="button">copy</button>
+            </div>
+            <div class="result" id="tipResult">—</div>
+          </div>
+          <div class="right-panel">
+            <div class="formula-title">live formula</div>
+            <div class="live-formula" id="tipLiveFormula">Tip = bill × (tip / 100)<br>Total = bill + tip<br>Each (÷people) = total / people</div>
+            <div class="live-result" id="tipLiveResult">→ —</div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -311,6 +412,7 @@
           <option value="base">find original</option>
           <option value="markup">markup &amp; margin</option>
           <option value="tax">reverse tax / vat</option>
+          <option value="tip">tip &amp; split</option>
         </select>
         <button class="reset-btn" id="clearHistoryBtn" type="button">clear history</button>
         <div class="confirm-group hidden" id="clearHistoryConfirm">
@@ -325,7 +427,7 @@
     </div>
   </div>
 
-  <footer>Mohamed Sayed · Ahmed Emara · DeepSeek · ChatGPT · Antigravity · 2026 · <span id="appVersion">Desktop v2.2.1</span></footer>
+  <footer>Mohamed Sayed · Ahmed Emara · DeepSeek · ChatGPT · Antigravity · 2026 · <span id="appVersion">Desktop v2.3.0</span></footer>
 </div>
 
 <div class="modal-backdrop hidden" id="aboutModal" role="dialog" aria-modal="true" aria-labelledby="aboutModalTitle">
@@ -339,7 +441,7 @@
       <div class="about-icon-badge" aria-hidden="true">%</div>
       <div>
         <div class="about-app-name" id="aboutAppName">Percentage Calculator Tool</div>
-        <div class="about-version-pill" id="aboutVersionPill">Desktop v2.2.1 · Tauri v2 + Rust</div>
+        <div class="about-version-pill" id="aboutVersionPill">Desktop v2.3.0 · Tauri v2 + Rust</div>
       </div>
     </div>
 
@@ -404,6 +506,11 @@
         <button class="copy-btn" id="copyReleaseUrlBtn" type="button">copy release link</button>
       </div>
       <div class="update-status-text" id="updateStatusText">Not checked yet in this session.</div>
+    </div>
+
+    <div class="about-box">
+      <div class="about-box-title">LAYOUT</div>
+      <button class="utility-btn" id="resetLayoutBtn" type="button">reset card order &amp; expand all</button>
     </div>
 
     <div class="modal-footer">

@@ -1,4 +1,4 @@
-// Frontend controller for the Tauri v2 desktop app (v2.1).
+// Frontend controller for the Tauri v2 desktop app (v2.3).
 //
 // Keeps the terminal DOM aesthetic, input parsing, and live-formula feedback,
 // while delegating all percentage math, persistent local history, clipboard,
@@ -33,7 +33,8 @@ const seq = {
   discount: 0,
   base: 0,
   markup: 0,
-  tax: 0
+  tax: 0,
+  tip: 0
 };
 
 // Holds the most recent valid calculation per card so explicit actions
@@ -45,7 +46,8 @@ const lastValidCalc = {
   discount: null,
   base: null,
   markup: null,
-  tax: null
+  tax: null,
+  tip: null
 };
 
 const CALC_INPUT_IDS = [
@@ -62,7 +64,10 @@ const CALC_INPUT_IDS = [
   "markupCost",
   "markupPrice",
   "taxAmount",
-  "taxRate"
+  "taxRate",
+  "tipBill",
+  "tipPercent",
+  "tipPeople"
 ];
 
 const ALLOWED_CALCULATORS = new Set([
@@ -72,7 +77,8 @@ const ALLOWED_CALCULATORS = new Set([
   "discount",
   "base",
   "markup",
-  "tax"
+  "tax",
+  "tip"
 ]);
 const FINITE_DECIMAL_RE = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i;
 
@@ -169,11 +175,28 @@ function buildValidHistoryCandidate(candidate) {
       v.length <= MAX_FIELD_LEN
   );
   if (!valid) return null;
+  const inputC = candidate.inputC;
+  if (
+    (candidate.calculator === "tip" || inputC != null) &&
+    (typeof inputC !== "string" ||
+      inputC.trim().length === 0 ||
+      inputC.length > MAX_FIELD_LEN)
+  ) {
+    return null;
+  }
+  if (candidate.calculator === "tip") {
+    const cleanedC = sanitizeNumericString(inputC);
+    if (!isFiniteDecimalString(cleanedC)) return null;
+    const numC = Number(cleanedC);
+    if (!Number.isFinite(numC) || !Number.isInteger(numC) || numC < 1) return null;
+  }
   const mode = candidate.mode ?? null;
   if (mode !== null && mode !== "add" && mode !== "extract") {
     return null;
   }
-  return candidate;
+  const validated = { ...candidate };
+  if (inputC == null) delete validated.inputC;
+  return validated;
 }
 
 function setLines(el, lines) {
@@ -817,6 +840,79 @@ async function updateTaxLive() {
   }
 }
 
+async function updateTipLive() {
+  const ticket = ++seq.tip;
+  const bill = getNumber("tipBill");
+  const tipPercent = getNumber("tipPercent");
+  const people = getNumber("tipPeople");
+  const formulaDiv = document.getElementById("tipLiveFormula");
+  const resultSpan = document.getElementById("tipLiveResult");
+  const defaultLines = [
+    "Tip = bill × (tip / 100)",
+    "Total = bill + tip",
+    "Each (÷people) = total / people"
+  ];
+
+  lastValidCalc.tip = null;
+  if (bill === null || tipPercent === null || people === null) {
+    setLines(formulaDiv, defaultLines);
+    resultSpan.textContent = "→ —";
+    setResult("tipResult", "—");
+    return;
+  }
+  if (![bill, tipPercent, people].every(Number.isFinite)) {
+    setCardOutOfRange("tip", formulaDiv, resultSpan, "tipResult", defaultLines);
+    return;
+  }
+
+  try {
+    const result = await invoke("calc_tip_split", { bill, tipPercent, people });
+    if (ticket !== seq.tip) return;
+    if (result.ok === "false") {
+      setFormulaError(formulaDiv, defaultLines[0], `(${result.error})`);
+      resultSpan.textContent = "→ invalid";
+      setResult("tipResult", result.error, true);
+      return;
+    }
+    if (!allFiniteValues(
+      result,
+      ["tipAmount", "totalBill", "perPerson"],
+      ["tipText", "totalText", "perPersonText", "label", "liveResult", "copyText"]
+    )) {
+      setCardOutOfRange("tip", formulaDiv, resultSpan, "tipResult", defaultLines);
+      return;
+    }
+    setLines(formulaDiv, [
+      `Tip = ${fmtFormulaNum(bill)} × (${fmtFormulaNum(tipPercent)} / 100) = ${result.tipText}`,
+      `Total = ${fmtFormulaNum(bill)} + ${fmtFormulaText(result.tipText)} = ${result.totalText}`,
+      `Each (÷${fmtFormulaNum(people)}) = ${fmtFormulaText(result.totalText)} / ${fmtFormulaNum(people)} = ${result.perPersonText}`
+    ]);
+    resultSpan.textContent = `→ ${result.liveResult}`;
+    setResult("tipResult", result.label);
+    lastValidCalc.tip = {
+      calculator: "tip",
+      calculatorLabel: "Tip & Bill Split",
+      inputA: getRawInput("tipBill"),
+      inputB: getRawInput("tipPercent"),
+      inputC: getRawInput("tipPeople"),
+      mode: null,
+      inputsText: `Bill ${bill} + ${tipPercent}% tip ÷ ${people}`,
+      resultText: `Tip: ${result.tipText} · Total: ${result.totalText} · Each: ${result.perPersonText}`,
+      copyText: result.copyText
+    };
+  } catch {
+    if (ticket !== seq.tip) return;
+    setCardOutOfRange("tip", formulaDiv, resultSpan, "tipResult", defaultLines);
+  }
+}
+
+function resetTip() {
+  document.getElementById("tipBill").value = "";
+  document.getElementById("tipPercent").value = "";
+  document.getElementById("tipPeople").value = "1";
+  return updateTipLive();
+}
+
 function formatHistoryTime(timestampMs) {
   if (!timestampMs) return "---- --:--:--";
   const date = new Date(timestampMs);
@@ -873,11 +969,14 @@ async function restoreHistoryEntry(entry) {
       b: "markupPrice",
       fn: updateMarkupLive
     },
-    tax: { card: "card-tax", a: "taxAmount", b: "taxRate", fn: updateTaxLive }
+    tax: { card: "card-tax", a: "taxAmount", b: "taxRate", fn: updateTaxLive },
+    tip: { card: "card-tip", a: "tipBill", b: "tipPercent", c: "tipPeople", fn: updateTipLive }
   };
 
-  if (!entry || !Object.hasOwn(map, entry.calculator)) return;
+  if (!buildValidHistoryCandidate(entry) || !Object.hasOwn(map, entry.calculator)) return;
   const target = map[entry.calculator];
+
+  expandCard(entry.calculator);
 
   if (entry.calculator === "tax" && entry.mode) {
     await setTaxMode(entry.mode, false);
@@ -889,6 +988,7 @@ async function restoreHistoryEntry(entry) {
 
   elA.value = entry.inputA;
   elB.value = entry.inputB;
+  if (target.c) document.getElementById(target.c).value = entry.inputC;
   await target.fn();
   flashRestoredCard(target.card);
   elA.focus({ preventScroll: true });
@@ -1041,6 +1141,7 @@ function clearAllCalculators() {
   resetFields(["baseX", "baseY"], "baseResult", updateBaseLive);
   resetFields(["markupCost", "markupPrice"], "markupResult", updateMarkupLive);
   resetFields(["taxAmount", "taxRate"], "taxResult", updateTaxLive);
+  resetTip();
   document.getElementById("changeOrig").focus();
 }
 
@@ -1097,10 +1198,258 @@ async function syncAppInfo() {
   }
 }
 
-let currentSettings = { checkUpdatesOnStartup: true };
-let lastPersistedSettings = { checkUpdatesOnStartup: true };
+const DEFAULT_CARD_ORDER = Object.freeze([
+  "change", "percent", "what", "discount", "base", "markup", "tax", "tip"
+]);
+
+function normalizeSettings(settings) {
+  const has = (key) => settings && typeof settings === "object" && Object.hasOwn(settings, key);
+  const validKey = (key) => typeof key === "string" && ALLOWED_CALCULATORS.has(key);
+  const order = has("cardOrder") ? settings.cardOrder : null;
+  const collapsed = has("collapsedCards") ? settings.collapsedCards : null;
+  return {
+    checkUpdatesOnStartup: has("checkUpdatesOnStartup") && typeof settings.checkUpdatesOnStartup === "boolean"
+      ? settings.checkUpdatesOnStartup : true,
+    cardOrder: Array.isArray(order) && order.length === DEFAULT_CARD_ORDER.length &&
+      new Set(order).size === DEFAULT_CARD_ORDER.length && Array.from(order).every(validKey)
+      ? [...order] : [...DEFAULT_CARD_ORDER],
+    collapsedCards: Array.isArray(collapsed) && Array.from(collapsed).every(validKey) &&
+      new Set(collapsed).size === collapsed.length ? [...collapsed] : []
+  };
+}
+
+let currentSettings = normalizeSettings(null);
+let lastPersistedSettings = normalizeSettings(null);
 let settingsSeq = 0;
+let settingsLoadPromise = Promise.resolve();
+let settingsSaveQueue = Promise.resolve();
 let latestReleaseUrl = RELEASE_URL;
+let cardDrag = null;
+
+function syncQuickNav(order) {
+  const nav = document.querySelector(".quick-nav");
+  if (!nav) return;
+  const links = Array.from(nav.querySelectorAll(".quick-link[data-calc]"));
+  for (const [index, key] of order.entries()) {
+    const link = links.find((item) => item.dataset.calc === key);
+    if (link && nav.children[index] !== link) {
+      nav.insertBefore(link, nav.children[index] ?? null);
+    }
+  }
+  const historyLink = nav.querySelector('.quick-link[href="#historySection"]');
+  if (historyLink && nav.children[nav.children.length - 1] !== historyLink) nav.appendChild(historyLink);
+}
+
+function applySettings(settings) {
+  const container = document.getElementById("cardsContainer");
+  for (const [index, key] of settings.cardOrder.entries()) {
+    const card = document.getElementById(`card-${key}`);
+    if (!card) continue;
+    if (container && container.children[index] !== card) {
+      container.insertBefore(card, container.children[index] ?? null);
+    }
+    const collapsed = settings.collapsedCards.includes(key);
+    card.classList.toggle("card-collapsed", collapsed);
+    const button = card.querySelector(".collapse-btn");
+    button?.setAttribute("aria-expanded", String(!collapsed));
+    if (button) button.textContent = collapsed ? "[ + ]" : "[ − ]";
+  }
+  syncQuickNav(settings.cardOrder);
+  const toggle = document.getElementById("autoUpdateToggle");
+  if (toggle) toggle.checked = settings.checkUpdatesOnStartup;
+}
+
+function saveSettings(changesOrUpdater, { keepExpandedOnError } = {}) {
+  const ticket = ++settingsSeq;
+  const optimisticPatch = typeof changesOrUpdater === "function" ? changesOrUpdater(currentSettings) : changesOrUpdater;
+  currentSettings = normalizeSettings({ ...currentSettings, ...optimisticPatch });
+  applySettings(currentSettings);
+
+  // Serialize writes as well as guarding UI replies: the backend must finish
+  // an earlier write before a newer snapshot can become persistent state.
+  const save = settingsSaveQueue.then(async () => {
+    try {
+      await settingsLoadPromise;
+      const patch = typeof changesOrUpdater === "function" ? changesOrUpdater(lastPersistedSettings) : changesOrUpdater;
+      const next = normalizeSettings({ ...lastPersistedSettings, ...patch });
+      const saved = await invoke("set_settings", { settings: next });
+      lastPersistedSettings = normalizeSettings(saved ?? next);
+      if (ticket === settingsSeq) {
+        currentSettings = normalizeSettings(lastPersistedSettings);
+        applySettings(currentSettings);
+      }
+      return true;
+    } catch {
+      if (ticket === settingsSeq) {
+        currentSettings = normalizeSettings(lastPersistedSettings);
+        applySettings(currentSettings);
+        if (keepExpandedOnError) showExpandedCard(keepExpandedOnError);
+        setUpdateStatus("Failed to save settings. Restored the last saved layout and preferences.", true);
+      }
+      return false;
+    }
+  });
+  settingsSaveQueue = save;
+  return save;
+}
+
+function showExpandedCard(key) {
+  const card = document.getElementById(`card-${key}`);
+  card?.classList.remove("card-collapsed");
+  const button = card?.querySelector(".collapse-btn");
+  button?.setAttribute("aria-expanded", "true");
+  if (button) button.textContent = "[ − ]";
+}
+
+function expandCard(key) {
+  if (!ALLOWED_CALCULATORS.has(key)) return false;
+  currentSettings.collapsedCards = currentSettings.collapsedCards.filter((item) => item !== key);
+  showExpandedCard(key);
+  void saveSettings((prev) => ({ collapsedCards: prev.collapsedCards.filter((item) => item !== key) }),
+    { keepExpandedOnError: key });
+  return true;
+}
+
+function clearCardDropHints() {
+  document.querySelectorAll("#cardsContainer .calc-section").forEach((card) => {
+    card.classList.remove("card-drop-before", "card-drop-after");
+  });
+}
+
+function updateCardDropTarget(x, y) {
+  if (!cardDrag) return;
+  clearCardDropHints();
+  cardDrag.target = null;
+  const cards = [];
+  for (const card of document.querySelectorAll("#cardsContainer .calc-section")) {
+    if (card === cardDrag.card) continue;
+    const rect = card.getBoundingClientRect?.();
+    if (!rect || ![rect.top, rect.bottom, rect.left, rect.right].every(Number.isFinite)) continue;
+    cards.push({ card, rect });
+  }
+  if (cards.length === 0) return;
+  const containerRect = document.getElementById("cardsContainer")?.getBoundingClientRect?.();
+  const inHorizontalBand = (containerRect && x >= containerRect.left - 80 && x <= containerRect.right + 80) ||
+    cards.some(({ rect }) => x >= rect.left && x <= rect.right);
+  if (!inHorizontalBand) return;
+  let target;
+  if (y < cards[0].rect.top) {
+    target = cards[0];
+  } else if (y > cards[cards.length - 1].rect.bottom) {
+    target = cards[cards.length - 1];
+  } else {
+    const distance = ({ rect }) => Math.abs(y - (rect.top + rect.bottom) / 2);
+    target = cards.reduce((closest, candidate) => distance(candidate) < distance(closest) ? candidate : closest);
+  }
+  cardDrag.target = target.card;
+  cardDrag.after = y >= (target.rect.top + target.rect.bottom) / 2;
+  target.card.classList.add(cardDrag.after ? "card-drop-after" : "card-drop-before");
+}
+
+function scrollCardDrag() {
+  if (!cardDrag?.moved) return;
+  const { x, y } = cardDrag;
+  const edge = 60;
+  const height = window.innerHeight;
+  const delta = y < edge ? -12 : y > height - edge ? 12 : 0;
+  if (delta !== 0) {
+    window.scrollBy?.({ top: delta, behavior: "instant" });
+    updateCardDropTarget(x, y);
+    cardDrag.frame = window.requestAnimationFrame?.(scrollCardDrag);
+  } else {
+    cardDrag.frame = 0;
+  }
+}
+
+function finishCardDrag(cancelled = false, event = null) {
+  if (!cardDrag || (event && event.pointerId !== cardDrag.pointerId)) return;
+  if (!cancelled && cardDrag.moved && event) {
+    updateCardDropTarget(event.clientX, event.clientY);
+  }
+  const drag = cardDrag;
+  cardDrag = null;
+  window.cancelAnimationFrame?.(drag.frame);
+  drag.card.classList.remove("card-dragging");
+  clearCardDropHints();
+  try {
+    drag.handle.releasePointerCapture?.(drag.pointerId);
+  } catch {
+    // Synthetic events and a cancelled native pointer may have no capture.
+  }
+  if (cancelled || !drag.moved || !drag.target) return;
+  const container = document.getElementById("cardsContainer");
+  if (!container || drag.target.parentNode !== container) return;
+  const targetIndex = Array.from(container.children).indexOf(drag.target);
+  const reference = drag.after ? container.children[targetIndex + 1] ?? null : drag.target;
+  if (reference !== drag.card) container.insertBefore(drag.card, reference);
+  const cardOrder = Array.from(container.querySelectorAll(".calc-section"), (card) => card.dataset.calc);
+  if (cardOrder.join() !== currentSettings.cardOrder.join()) saveSettings({ cardOrder });
+}
+
+function bindCardLayout() {
+  document.querySelectorAll("#cardsContainer .calc-section").forEach((card) => {
+    const key = card.dataset.calc;
+    card.querySelector(".collapse-btn")?.addEventListener("click", () => {
+      finishCardDrag(true);
+      saveSettings((prev) => ({ collapsedCards: prev.collapsedCards.includes(key)
+        ? prev.collapsedCards.filter((item) => item !== key) : [...prev.collapsedCards, key] }));
+    });
+    const handle = card.querySelector(".drag-handle");
+    handle?.addEventListener("pointerdown", (event) => {
+      if (cardDrag || event.button !== 0 || event.isPrimary === false) return;
+      event.preventDefault();
+      cardDrag = {
+        card, handle, pointerId: event.pointerId,
+        startX: event.clientX, startY: event.clientY,
+        x: event.clientX, y: event.clientY, moved: false, target: null, after: false
+      };
+      try {
+        handle.setPointerCapture?.(event.pointerId);
+      } catch {
+        // Document listeners also handle synthetic or uncaptured pointers.
+      }
+    });
+    handle?.addEventListener("lostpointercapture", (event) => {
+      if (cardDrag?.handle === handle) finishCardDrag(true, event);
+    });
+  });
+  document.addEventListener("pointermove", (event) => {
+    if (!cardDrag || event.pointerId !== cardDrag.pointerId) return;
+    cardDrag.x = event.clientX;
+    cardDrag.y = event.clientY;
+    if (!cardDrag.moved) {
+      if (Math.hypot(event.clientX - cardDrag.startX, event.clientY - cardDrag.startY) < 4) return;
+      cardDrag.moved = true;
+      cardDrag.card.classList.add("card-dragging");
+    }
+    if (cardDrag.moved && !cardDrag.frame && (event.clientY < 60 || event.clientY > window.innerHeight - 60)) {
+      cardDrag.frame = window.requestAnimationFrame?.(scrollCardDrag);
+    }
+    event.preventDefault();
+    updateCardDropTarget(event.clientX, event.clientY);
+  });
+  document.addEventListener("pointerup", (event) => finishCardDrag(false, event));
+  document.addEventListener("pointercancel", (event) => finishCardDrag(true, event));
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") finishCardDrag(true);
+  });
+  document.querySelectorAll(".quick-nav .quick-link[data-calc]").forEach((link) => {
+    link.addEventListener("click", (event) => {
+      const key = link.dataset.calc;
+      if (!currentSettings.collapsedCards.includes(key)) return;
+      event.preventDefault();
+      expandCard(key);
+      window.location.hash = `card-${key}`;
+      const card = document.getElementById(`card-${key}`);
+      card?.scrollIntoView({ behavior: "smooth", block: "start" });
+      card?.querySelector("input")?.focus({ preventScroll: true });
+    });
+  });
+  document.getElementById("resetLayoutBtn")?.addEventListener("click", () => {
+    finishCardDrag(true);
+    saveSettings({ cardOrder: [...DEFAULT_CARD_ORDER], collapsedCards: [] });
+  });
+}
 
 function openSettingsModal() {
   const modal = document.getElementById("settingsModal");
@@ -1204,28 +1553,23 @@ async function openReleasePage() {
 
 async function loadSettingsAndMaybeCheckUpdates(isSmokeMode = false) {
   const ticket = ++settingsSeq;
-  let loadedSettings = { checkUpdatesOnStartup: true };
-  try {
-    const loaded = await invoke("get_settings");
-    if (loaded && typeof loaded.checkUpdatesOnStartup === "boolean") {
-      loadedSettings = loaded;
+  settingsLoadPromise = (async () => {
+    let loadedSettings;
+    try {
+      loadedSettings = await invoke("get_settings");
+    } catch {
+      loadedSettings = { checkUpdatesOnStartup: false };
     }
-  } catch {
-    loadedSettings = { checkUpdatesOnStartup: false };
-  }
-
-  if (ticket === settingsSeq) {
-    lastPersistedSettings = { ...loadedSettings };
-    currentSettings = { ...loadedSettings };
-    const toggle = document.getElementById("autoUpdateToggle");
-    if (toggle) {
-      toggle.checked = Boolean(currentSettings.checkUpdatesOnStartup);
+    lastPersistedSettings = normalizeSettings(loadedSettings);
+    if (ticket === settingsSeq) {
+      currentSettings = normalizeSettings(lastPersistedSettings);
+      applySettings(currentSettings);
+      if (currentSettings.checkUpdatesOnStartup && !isSmokeMode) {
+        runUpdateCheck(false);
+      }
     }
-  }
-
-  if (currentSettings.checkUpdatesOnStartup && !isSmokeMode) {
-    runUpdateCheck(false);
-  }
+  })();
+  await settingsLoadPromise;
 }
 
 function bindControls() {
@@ -1271,25 +1615,7 @@ function bindControls() {
   document
     .getElementById("autoUpdateToggle")
     ?.addEventListener("change", async (event) => {
-      const toggle = event.currentTarget;
-      const ticket = ++settingsSeq;
-      const next = { checkUpdatesOnStartup: Boolean(toggle.checked) };
-      try {
-        const saved = await invoke("set_settings", { settings: next });
-        if (ticket !== settingsSeq) return;
-        const persisted =
-          saved && typeof saved.checkUpdatesOnStartup === "boolean"
-            ? saved
-            : next;
-        lastPersistedSettings = { ...persisted };
-        currentSettings = { ...persisted };
-        toggle.checked = Boolean(currentSettings.checkUpdatesOnStartup);
-      } catch {
-        if (ticket !== settingsSeq) return;
-        currentSettings = { ...lastPersistedSettings };
-        toggle.checked = Boolean(lastPersistedSettings.checkUpdatesOnStartup);
-        setUpdateStatus("Failed to save update setting.", true);
-      }
+      await saveSettings({ checkUpdatesOnStartup: Boolean(event.currentTarget.checked) });
     });
   document
     .getElementById("checkUpdatesNowBtn")
@@ -1328,7 +1654,7 @@ function bindControls() {
     }
   });
 
-  // Swap buttons (Option B) across all 7 cards
+  // Swap buttons across all 8 cards
   document
     .getElementById("swapChangeBtn")
     .addEventListener("click", () =>
@@ -1364,6 +1690,16 @@ function bindControls() {
     .addEventListener("click", () =>
       swapFields("taxAmount", "taxRate", updateTaxLive)
     );
+
+  document.getElementById("swapTipBtn").addEventListener("click", () =>
+    swapFields("tipBill", "tipPercent", updateTipLive)
+  );
+  document.querySelectorAll(".preset-btn[data-tip]").forEach((button) => {
+    button.addEventListener("click", () => {
+      document.getElementById("tipPercent").value = button.dataset.tip;
+      updateTipLive();
+    });
+  });
 
   // Tax mode toggle
   document
@@ -1503,6 +1839,16 @@ function bindControls() {
       await copyCardResult("tax", event.currentTarget);
     });
 
+  // Card 8: Tip & Bill Split
+  document.getElementById("calcTipBtn").addEventListener("click", async () => {
+    await updateTipLive();
+    await recordHistoryFor("tip");
+  });
+  document.getElementById("resetTipBtn").addEventListener("click", resetTip);
+  document.getElementById("copyTipBtn").addEventListener("click", async (event) => {
+    await copyCardResult("tip", event.currentTarget);
+  });
+
   // History filter & clear confirmation flow
   document
     .getElementById("historyFilter")
@@ -1579,6 +1925,10 @@ function bindLiveUpdates() {
     .getElementById("taxRate")
     .addEventListener("input", updateTaxLive);
 
+  ["tipBill", "tipPercent", "tipPeople"].forEach((id) => {
+    document.getElementById(id).addEventListener("input", updateTipLive);
+  });
+
   attachPasteSanitizers();
 }
 
@@ -1611,12 +1961,15 @@ function bindEnterKeys() {
     await updateTaxLive();
     await recordHistoryFor("tax");
   });
+  attachEnterKey(["tipBill", "tipPercent", "tipPeople"], async () => {
+    await updateTipLive();
+    await recordHistoryFor("tip");
+  });
 }
 
 // Runs inside the real Tauri webview when launched with `--smoke-test`.
-// Verifies the original 30+ checks plus all v2.1 features (swap values,
-// Markup & Margin, Reverse Tax/VAT add & extract, persistent history
-// add/restore/clear, and the redesigned dark-terminal About modal).
+// Exercises calculations, history, layout persistence, pointer gestures, and modals
+// using the smoke backend’s in-memory state. Restores the original layout afterward.
 async function runSmokeTestIfRequested(smokeEnabledArg) {
   let enabled = smokeEnabledArg;
   if (typeof enabled !== "boolean") {
@@ -1627,7 +1980,10 @@ async function runSmokeTestIfRequested(smokeEnabledArg) {
     }
   }
   if (!enabled) return;
+  await runSmokeTests();
+}
 
+async function runSmokeTests() {
   const setInput = (id, value, waitFn) => {
     const el = document.getElementById(id);
     el.value = value;
@@ -1648,12 +2004,28 @@ async function runSmokeTestIfRequested(smokeEnabledArg) {
     if (!ok) failures.push(name);
   };
 
+  const waitUntil = async (pred) => {
+    for (let i = 0; i < 20; i++) {
+      if (await pred()) return true;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    return Boolean(await pred());
+  };
+  const cardOrder = () => Array.from(document.querySelectorAll("#cardsContainer .calc-section"), (card) => card.dataset.calc);
+  const navOrder = () => Array.from(document.querySelectorAll(".quick-nav .quick-link[data-calc]"), (link) => link.dataset.calc);
+  const sameOrder = (a, b) => a.join() === b.join();
+  await settingsSaveQueue;
+  const originalSettings = normalizeSettings(currentSettings);
+
   try {
+    check("smoke-layout-baseline", await saveSettings(normalizeSettings(null)));
+    renderHistory(await invoke("history_clear"));
+    document.getElementById("changeOrig").focus();
     check("initial-focus", document.activeElement?.id === "changeOrig");
 
     const appInfo = await invoke("get_app_info");
     check("app-name", appInfo.name === "Percentage Calculator Tool");
-    check("app-version", appInfo.version === "2.2.1");
+    check("app-version", appInfo.version === "2.3.0");
     check(
       "app-credits",
       appInfo.credits.includes("Mohamed Sayed") &&
@@ -1664,13 +2036,13 @@ async function runSmokeTestIfRequested(smokeEnabledArg) {
       "footer-version",
       document
         .getElementById("appVersion")
-        .textContent.includes("Desktop v2.2.1")
+        .textContent.includes("Desktop v2.3.0")
     );
 
     const quickLinks = Array.from(document.querySelectorAll(".quick-nav .quick-link"));
     check(
       "quick-nav-links",
-      quickLinks.length === 8 &&
+      quickLinks.length === 9 &&
         quickLinks.every((link) => {
           const targetId = link.getAttribute("href")?.replace(/^#/, "");
           return Boolean(targetId && document.getElementById(targetId));
@@ -1856,14 +2228,6 @@ async function runSmokeTestIfRequested(smokeEnabledArg) {
         document.getElementById("historyList").textContent.includes("Markup & Margin")
     );
 
-    const waitUntil = async (pred) => {
-      for (let i = 0; i < 20; i++) {
-        if (await pred()) return true;
-        await new Promise((resolve) => setTimeout(resolve, 25));
-      }
-      return Boolean(await pred());
-    };
-
     // Restore from filtered history row + verify card highlight
     const restoreBtn = document.querySelector(".history-restore-btn");
     restoreBtn.click();
@@ -1899,10 +2263,147 @@ async function runSmokeTestIfRequested(smokeEnabledArg) {
       await waitUntil(() => text("historyCount") === "(0 / 500)")
     );
 
+    // Tip presets, swap, three-field history, validation, and clear behavior.
+    await setInput("tipBill", "100", updateTipLive);
+    await setInput("tipPeople", "4", updateTipLive);
+    document.querySelector('.preset-btn[data-tip="20"]').click();
+    check("tip-preset-20", await waitUntil(() =>
+      document.getElementById("tipPercent").value === "20" &&
+      lastValidCalc.tip?.inputB === "20" &&
+      text("tipResult").includes("20.00") &&
+      text("tipResult").includes("120.00") &&
+      text("tipResult").includes("30.00")
+    ));
+    check("tip-three-line-formula", document.getElementById("tipLiveFormula").querySelectorAll("br").length === 2);
+    document.getElementById("calcTipBtn").click();
+    check("tip-history-three-fields", await waitUntil(async () => {
+      const entries = await invoke("history_list");
+      return entries.length === 1 && entries[0].calculator === "tip" &&
+        entries[0].inputA === "100" && entries[0].inputB === "20" && entries[0].inputC === "4";
+    }));
+    document.getElementById("swapTipBtn").click();
+    check("tip-swap", await waitUntil(() => lastValidCalc.tip?.inputA === "20" &&
+      lastValidCalc.tip?.inputB === "100" && document.getElementById("tipPeople").value === "4"));
+    await setInput("tipPeople", "0", updateTipLive);
+    check("tip-invalid-people", !lastValidCalc.tip && Boolean(document.querySelector("#tipResult .error-text")));
+    document.getElementById("copyTipBtn").click();
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    check("tip-error-copy-blocked", document.getElementById("copyTipBtn").textContent !== "copied");
+    await setInput("tipPeople", "4", updateTipLive);
+    await setInput("tipBill", "-100", updateTipLive);
+    check("tip-negative-bill", !lastValidCalc.tip && Boolean(document.querySelector("#tipResult .error-text")));
+    document.getElementById("resetTipBtn").click();
+    check("tip-clear", document.getElementById("tipBill").value === "" &&
+      document.getElementById("tipPercent").value === "" &&
+      document.getElementById("tipPeople").value === "1" && text("tipResult").includes("—"));
+
+    const tipCard = document.getElementById("card-tip");
+    const collapseTip = tipCard.querySelector(".collapse-btn");
+    collapseTip.click();
+    await settingsSaveQueue;
+    check("collapse-tip-persisted", tipCard.classList.contains("card-collapsed") &&
+      collapseTip.getAttribute("aria-expanded") === "false" && collapseTip.textContent === "[ + ]" &&
+      (await invoke("get_settings")).collapsedCards.includes("tip"));
+    collapseTip.click();
+    await settingsSaveQueue;
+    check("expand-tip-persisted", !tipCard.classList.contains("card-collapsed") &&
+      collapseTip.getAttribute("aria-expanded") === "true" && collapseTip.textContent === "[ − ]" &&
+      !(await invoke("get_settings")).collapsedCards.includes("tip"));
+    collapseTip.click();
+    await settingsSaveQueue;
+    document.querySelector('.quick-link[data-calc="tip"]').click();
+    check("quick-nav-auto-expand", await waitUntil(async () =>
+      !tipCard.classList.contains("card-collapsed") &&
+      !(await invoke("get_settings")).collapsedCards.includes("tip") &&
+      document.activeElement?.id === "tipBill"
+    ));
+    collapseTip.click();
+    await settingsSaveQueue;
+    document.querySelector(".history-restore-btn").click();
+    check("tip-history-restore-auto-expand", await waitUntil(async () =>
+      !tipCard.classList.contains("card-collapsed") &&
+      !(await invoke("get_settings")).collapsedCards.includes("tip") &&
+      lastValidCalc.tip?.inputA === "100" && lastValidCalc.tip?.inputB === "20" &&
+      lastValidCalc.tip?.inputC === "4" && document.getElementById("tipPeople").value === "4"
+    ));
+    clearAllCalculators();
+    check("tip-clear-all", document.getElementById("tipBill").value === "" &&
+      document.getElementById("tipPercent").value === "" && document.getElementById("tipPeople").value === "1");
+
+    // Real PointerEvent dispatch through the handle and document listeners.
+    const dragCard = document.getElementById("card-change");
+    const dropCard = document.getElementById("card-percent");
+    const handle = dragCard.querySelector(".drag-handle");
+    const dragToPercent = (ending) => {
+      const from = handle.getBoundingClientRect?.();
+      const target = ending === "pointerup" ? dropCard : document.getElementById("card-what");
+      const to = target.getBoundingClientRect?.();
+      if (!from || !to) return false;
+      const pointer = { bubbles: true, cancelable: true, pointerId: 23, pointerType: "mouse", isPrimary: true, button: 0 };
+      handle.dispatchEvent(new PointerEvent("pointerdown", { ...pointer, clientX: from.left + 4, clientY: from.top + 4 }));
+      handle.dispatchEvent(new PointerEvent("pointermove", { ...pointer, clientX: to.left + 10, clientY: to.bottom - 10 }));
+      if (ending === "escape") {
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      } else {
+        handle.dispatchEvent(new PointerEvent(ending, { ...pointer, clientX: to.left + 10, clientY: to.bottom - 10 }));
+      }
+      return true;
+    };
+    check("pointer-drag-dispatched", dragToPercent("pointerup"));
+    await settingsSaveQueue;
+    const reordered = ["percent", "change", ...DEFAULT_CARD_ORDER.slice(2)];
+    check("pointer-reorder-dom-nav-settings", sameOrder(cardOrder(), reordered) &&
+      sameOrder(navOrder(), reordered) && sameOrder((await invoke("get_settings")).cardOrder, reordered) &&
+      document.querySelector(".quick-nav").lastElementChild.getAttribute("href") === "#historySection");
+    dragToPercent("escape");
+    await settingsSaveQueue;
+    check("pointer-escape-cancel", sameOrder(cardOrder(), reordered) &&
+      sameOrder((await invoke("get_settings")).cardOrder, reordered) &&
+      !document.querySelector(".card-dragging, .card-drop-before, .card-drop-after"));
+    dragToPercent("pointercancel");
+    check("pointer-cancel-clean", sameOrder(cardOrder(), reordered) &&
+      !document.querySelector(".card-dragging, .card-drop-before, .card-drop-after"));
+
+    collapseTip.click();
+    await settingsSaveQueue;
+    const layoutToggle = document.getElementById("autoUpdateToggle");
+    layoutToggle.checked = false;
+    layoutToggle.dispatchEvent(new Event("change"));
+    await settingsSaveQueue;
+    const layoutSaved = await invoke("get_settings");
+    check("auto-update-preserves-layout", layoutSaved.checkUpdatesOnStartup === false &&
+      sameOrder(layoutSaved.cardOrder, reordered) && layoutSaved.collapsedCards.includes("tip"));
+    layoutToggle.checked = true;
+    layoutToggle.dispatchEvent(new Event("change"));
+    await settingsSaveQueue;
+    const lastRect = document.getElementById("cardsContainer").lastElementChild.getBoundingClientRect();
+    const handleRect = handle.getBoundingClientRect();
+    const pastLastPointer = { bubbles: true, cancelable: true, pointerId: 24, pointerType: "mouse", isPrimary: true, button: 0 };
+    const pastLastPosition = { clientX: lastRect.left + 10, clientY: lastRect.bottom + 40 };
+    handle.dispatchEvent(new PointerEvent("pointerdown", { ...pastLastPointer, clientX: handleRect.left + 4, clientY: handleRect.top + 4 }));
+    handle.dispatchEvent(new PointerEvent("pointermove", { ...pastLastPointer, ...pastLastPosition }));
+    handle.dispatchEvent(new PointerEvent("pointerup", { ...pastLastPointer, ...pastLastPosition }));
+    await settingsSaveQueue;
+    const movedToEnd = [...reordered.filter((key) => key !== "change"), "change"];
+    check("pointer-drag-past-last-card", document.getElementById("cardsContainer").lastElementChild === dragCard &&
+      sameOrder(cardOrder(), movedToEnd) && sameOrder(navOrder(), movedToEnd) &&
+      sameOrder((await invoke("get_settings")).cardOrder, movedToEnd));
+    document.getElementById("settingsBtn").click();
+    document.getElementById("resetLayoutBtn").click();
+    await settingsSaveQueue;
+    const resetSettings = await invoke("get_settings");
+    check("reset-layout-dom-nav-settings", sameOrder(cardOrder(), DEFAULT_CARD_ORDER) &&
+      sameOrder(navOrder(), DEFAULT_CARD_ORDER) && sameOrder(resetSettings.cardOrder, DEFAULT_CARD_ORDER) &&
+      resetSettings.collapsedCards.length === 0 && !document.querySelector(".card-collapsed") &&
+      document.querySelector(".quick-nav").lastElementChild.getAttribute("href") === "#historySection");
+    document.getElementById("closeSettingsBtn").click();
+    renderHistory(await invoke("history_clear"));
+
     // Redesigned About modal checks
     document.getElementById("aboutBtn").click();
     const aboutModal = document.getElementById("aboutModal");
     check("about-modal-open", !aboutModal.classList.contains("hidden"));
+    check("about-version", text("aboutVersionPill") === "Desktop v2.3.0 · Tauri v2 + Rust");
     check(
       "about-modal-credits",
       text("aboutModal").includes("CREDITS") &&
@@ -1955,6 +2456,35 @@ async function runSmokeTestIfRequested(smokeEnabledArg) {
     await invoke("copy_text", { text: "percentage-tool-smoke-test" });
   } catch (err) {
     failures.push(`exception: ${err}`);
+  } finally {
+    finishCardDrag(true);
+    try {
+      await settingsSaveQueue;
+      check("smoke-settings-restored", await saveSettings(originalSettings));
+      const restored = normalizeSettings(await invoke("get_settings"));
+      check("smoke-original-layout", restored.checkUpdatesOnStartup === originalSettings.checkUpdatesOnStartup &&
+        sameOrder(restored.cardOrder, originalSettings.cardOrder) &&
+        sameOrder(restored.collapsedCards, originalSettings.collapsedCards) &&
+        sameOrder(cardOrder(), originalSettings.cardOrder) && sameOrder(navOrder(), originalSettings.cardOrder));
+      renderHistory(await invoke("history_clear"));
+    } catch (err) {
+      failures.push(`cleanup: ${err}`);
+    }
+    document.getElementById("historyFilter").value = "all";
+    historyFilterValue = "all";
+    renderHistory();
+    setTaxMode("add", false);
+    clearAllCalculators();
+    closeAboutModal();
+    closeSettingsModal();
+    document.getElementById("clearHistoryConfirm").classList.add("hidden");
+    document.getElementById("clearHistoryBtn").classList.remove("hidden");
+    document.querySelectorAll(".card-restored").forEach((card) => {
+      window.clearTimeout(Number(card.dataset.restoreTimer || 0));
+      card.classList.remove("card-restored");
+    });
+    window.history.replaceState(null, "", window.location.pathname);
+    window.scrollTo(0, 0);
   }
 
   await invoke("report_smoke_result", {
@@ -1965,6 +2495,7 @@ async function runSmokeTestIfRequested(smokeEnabledArg) {
 
 async function initialize() {
   bindControls();
+  bindCardLayout();
   bindLiveUpdates();
   bindEnterKeys();
 
@@ -1983,6 +2514,7 @@ async function initialize() {
     updateBaseLive(),
     updateMarkupLive(),
     updateTaxLive(),
+    updateTipLive(),
     syncAppInfo(),
     loadHistory(),
     loadSettingsAndMaybeCheckUpdates(smokeEnabled)

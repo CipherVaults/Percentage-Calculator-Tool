@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'sha256-HppoWhfVX+UyR2KqXbS6U2Q3KafIo1MVyti/h94cX9o='; script-src 'sha256-TBLbyC6w4mcvDRHt1c3u2B0Z8Sz/WAPkTKFYihhgdkM='; worker-src 'self'; child-src 'self'; img-src 'self' data:; manifest-src 'self'; connect-src 'self' https://api.github.com; object-src 'none'; base-uri 'none'; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'sha256-y7PiUvGHgOtssWy4oWu+3eyhobGOPhpXdDGRRQ5evAg='; script-src 'sha256-D7NghmsCoB9FfmTU2Dhl4+Ug/4HQMo9pLucc3DSLY4I='; worker-src 'self'; child-src 'self'; img-src 'self' data:; manifest-src 'self'; connect-src 'self' https://api.github.com; object-src 'none'; base-uri 'none'; form-action 'none';">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0E0F12">
   <meta name="color-scheme" content="dark">
@@ -142,6 +142,100 @@
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 1.8rem;
+    }
+
+    .calc-card-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.65rem;
+    }
+
+    .card-heading {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .drag-handle,
+    .collapse-btn,
+    .preset-btn {
+      background: #0E0F12;
+      border: 1px solid #3a3f4c;
+      color: #94C59A;
+      font: inherit;
+      font-size: 0.78rem;
+      min-height: 44px;
+      min-width: 44px;
+      padding: 0.35rem 0.55rem;
+      cursor: pointer;
+    }
+
+    .drag-handle {
+      touch-action: none;
+      cursor: grab;
+      user-select: none;
+      -webkit-user-select: none;
+      flex-shrink: 0;
+      font-size: 1.3rem;
+    }
+
+    .collapse-btn {
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
+
+    .drag-handle:hover,
+    .collapse-btn:hover,
+    .preset-btn:hover,
+    .drag-handle:focus-visible,
+    .collapse-btn:focus-visible,
+    .preset-btn:focus-visible {
+      border-color: #E9A715;
+      color: #E9A715;
+      outline: 1px solid #E9A715;
+      outline-offset: 2px;
+    }
+
+    .card-dragging {
+      opacity: 0.55;
+      outline: 1px dashed #94C59A;
+    }
+
+    .card-dragging .drag-handle {
+      cursor: grabbing;
+    }
+
+    .card-drop-before {
+      box-shadow: 0 -4px 0 #E9A715;
+    }
+
+    .card-drop-after {
+      box-shadow: 0 4px 0 #E9A715;
+    }
+
+    .card-collapsed .calc-card-body {
+      display: none;
+    }
+
+    .card-collapsed .section-subtitle {
+      margin-bottom: 0;
+    }
+
+    .preset-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem;
+      margin-bottom: 0.65rem;
+    }
+
+    .preset-btn {
+      border-radius: 999px;
+      padding: 0.35rem 0.8rem;
+    }
+
+    .preset-btn.active {
+      background: #E9A715;
+      border-color: #E9A715;
+      color: #0E0F12;
     }
 
     .left-panel {
@@ -939,265 +1033,369 @@
   </div>
 
   <nav class="quick-nav" aria-label="Jump to calculator">
-    <a class="quick-link" href="#card-change">change</a>
-    <a class="quick-link" href="#card-percent">% of total</a>
-    <a class="quick-link" href="#card-what">portion</a>
-    <a class="quick-link" href="#card-discount">discount</a>
-    <a class="quick-link" href="#card-base">original</a>
-    <a class="quick-link" href="#card-markup">markup &amp; margin</a>
-    <a class="quick-link" href="#card-tax">tax / vat</a>
+    <a class="quick-link" href="#card-change" data-calc="change">change</a>
+    <a class="quick-link" href="#card-percent" data-calc="percent">% of total</a>
+    <a class="quick-link" href="#card-what" data-calc="what">portion</a>
+    <a class="quick-link" href="#card-discount" data-calc="discount">discount</a>
+    <a class="quick-link" href="#card-base" data-calc="base">original</a>
+    <a class="quick-link" href="#card-markup" data-calc="markup">markup &amp; margin</a>
+    <a class="quick-link" href="#card-tax" data-calc="tax">tax / vat</a>
+    <a class="quick-link" href="#card-tip" data-calc="tip">tip &amp; split</a>
     <a class="quick-link" href="#historySection">history</a>
   </nav>
 
-  <div class="calc-section" id="card-change">
-    <div class="calc-grid">
-      <div class="left-panel">
+  <div id="cardsContainer">
+  <div class="calc-section" id="card-change" data-calc="change">
+    <div class="calc-card-header">
+      <button class="drag-handle" type="button" aria-label="Drag to reorder Percentage Change" title="Drag to reorder">⠿</button>
+      <div class="card-heading">
         <div class="section-title">Percentage Change</div>
         <div class="section-subtitle">Shows how much a value increased or decreased relative to the original.</div>
-
-        <div class="input-row">
-          <label for="changeOrig">Original value</label>
-          <input type="number" id="changeOrig" placeholder="e.g., 150" step="any" enterkeyhint="done" autocomplete="off">
-        </div>
-        <div class="swap-row">
-          <button class="swap-btn" id="swapChangeBtn" type="button" title="Swap original and new values">⇅ swap values</button>
-        </div>
-        <div class="input-row">
-          <label for="changeNew">New value</label>
-          <input type="number" id="changeNew" placeholder="e.g., 180" step="any" enterkeyhint="done" autocomplete="off">
-        </div>
-
-        <div class="button-group">
-          <button class="calc-btn" id="calcChangeBtn" type="button">calculate</button>
-          <button class="reset-btn" id="resetChangeBtn" type="button">clear</button>
-          <button class="copy-btn" id="copyChangeBtn" type="button">copy</button>
-        </div>
-
-        <div class="result" id="changeResult">—</div>
       </div>
+      <button class="collapse-btn" type="button" aria-label="Collapse Percentage Change" aria-expanded="true" aria-controls="card-change-body">[ − ]</button>
+    </div>
+    <div class="calc-card-body" id="card-change-body">
+      <div class="calc-grid">
+        <div class="left-panel">
+          <div class="input-row">
+            <label for="changeOrig">Original value</label>
+            <input type="number" id="changeOrig" placeholder="e.g., 150" step="any" enterkeyhint="done" autocomplete="off">
+          </div>
+          <div class="swap-row">
+            <button class="swap-btn" id="swapChangeBtn" type="button" title="Swap original and new values">⇅ swap values</button>
+          </div>
+          <div class="input-row">
+            <label for="changeNew">New value</label>
+            <input type="number" id="changeNew" placeholder="e.g., 180" step="any" enterkeyhint="done" autocomplete="off">
+          </div>
 
-      <div class="right-panel">
-        <div class="formula-title">live formula</div>
-        <div class="live-formula" id="changeLiveFormula">((new − original) / original) × 100</div>
-        <div class="live-result" id="changeLiveResult">→ —</div>
+          <div class="button-group">
+            <button class="calc-btn" id="calcChangeBtn" type="button">calculate</button>
+            <button class="reset-btn" id="resetChangeBtn" type="button">clear</button>
+            <button class="copy-btn" id="copyChangeBtn" type="button">copy</button>
+          </div>
+
+          <div class="result" id="changeResult">—</div>
+        </div>
+
+        <div class="right-panel">
+          <div class="formula-title">live formula</div>
+          <div class="live-formula" id="changeLiveFormula">((new − original) / original) × 100</div>
+          <div class="live-result" id="changeLiveResult">→ —</div>
+        </div>
       </div>
     </div>
   </div>
 
-  <div class="calc-section" id="card-percent">
-    <div class="calc-grid">
-      <div class="left-panel">
+  <div class="calc-section" id="card-percent" data-calc="percent">
+    <div class="calc-card-header">
+      <button class="drag-handle" type="button" aria-label="Drag to reorder Percentage of Total" title="Drag to reorder">⠿</button>
+      <div class="card-heading">
         <div class="section-title">Percentage of Total</div>
         <div class="section-subtitle">Finds what percentage one number is of another.</div>
-
-        <div class="input-row">
-          <label for="isWhatX">X (part)</label>
-          <input type="number" id="isWhatX" placeholder="e.g., 50" step="any" enterkeyhint="done" autocomplete="off">
-        </div>
-        <div class="swap-row">
-          <button class="swap-btn" id="swapPercentBtn" type="button" title="Swap X and Y values">⇅ swap values</button>
-        </div>
-        <div class="input-row">
-          <label for="isWhatY">Y (total)</label>
-          <input type="number" id="isWhatY" placeholder="e.g., 200" step="any" enterkeyhint="done" autocomplete="off">
-        </div>
-
-        <div class="button-group">
-          <button class="calc-btn" id="calcPercentBtn" type="button">calculate</button>
-          <button class="reset-btn" id="resetPercentBtn" type="button">clear</button>
-          <button class="copy-btn" id="copyPercentBtn" type="button">copy</button>
-        </div>
-
-        <div class="result" id="percentResult">—</div>
       </div>
+      <button class="collapse-btn" type="button" aria-label="Collapse Percentage of Total" aria-expanded="true" aria-controls="card-percent-body">[ − ]</button>
+    </div>
+    <div class="calc-card-body" id="card-percent-body">
+      <div class="calc-grid">
+        <div class="left-panel">
+          <div class="input-row">
+            <label for="isWhatX">X (part)</label>
+            <input type="number" id="isWhatX" placeholder="e.g., 50" step="any" enterkeyhint="done" autocomplete="off">
+          </div>
+          <div class="swap-row">
+            <button class="swap-btn" id="swapPercentBtn" type="button" title="Swap X and Y values">⇅ swap values</button>
+          </div>
+          <div class="input-row">
+            <label for="isWhatY">Y (total)</label>
+            <input type="number" id="isWhatY" placeholder="e.g., 200" step="any" enterkeyhint="done" autocomplete="off">
+          </div>
 
-      <div class="right-panel">
-        <div class="formula-title">live formula</div>
-        <div class="live-formula" id="percentLiveFormula">(X / Y) × 100</div>
-        <div class="live-result" id="percentLiveResult">→ —</div>
+          <div class="button-group">
+            <button class="calc-btn" id="calcPercentBtn" type="button">calculate</button>
+            <button class="reset-btn" id="resetPercentBtn" type="button">clear</button>
+            <button class="copy-btn" id="copyPercentBtn" type="button">copy</button>
+          </div>
+
+          <div class="result" id="percentResult">—</div>
+        </div>
+
+        <div class="right-panel">
+          <div class="formula-title">live formula</div>
+          <div class="live-formula" id="percentLiveFormula">(X / Y) × 100</div>
+          <div class="live-result" id="percentLiveResult">→ —</div>
+        </div>
       </div>
     </div>
   </div>
 
-  <div class="calc-section" id="card-what">
-    <div class="calc-grid">
-      <div class="left-panel">
+  <div class="calc-section" id="card-what" data-calc="what">
+    <div class="calc-card-header">
+      <button class="drag-handle" type="button" aria-label="Drag to reorder Calculate Percentage" title="Drag to reorder">⠿</button>
+      <div class="card-heading">
         <div class="section-title">Calculate Percentage</div>
         <div class="section-subtitle">Calculates a percentage portion of a number.</div>
-
-        <div class="input-row">
-          <label for="whatX">X (percent)</label>
-          <input type="number" id="whatX" placeholder="e.g., 20" step="any" enterkeyhint="done" autocomplete="off">
-        </div>
-        <div class="swap-row">
-          <button class="swap-btn" id="swapWhatBtn" type="button" title="Swap X and Y values">⇅ swap values</button>
-        </div>
-        <div class="input-row">
-          <label for="whatY">Y (number)</label>
-          <input type="number" id="whatY" placeholder="e.g., 500" step="any" enterkeyhint="done" autocomplete="off">
-        </div>
-
-        <div class="button-group">
-          <button class="calc-btn" id="calcWhatBtn" type="button">calculate</button>
-          <button class="reset-btn" id="resetWhatBtn" type="button">clear</button>
-          <button class="copy-btn" id="copyWhatBtn" type="button">copy</button>
-        </div>
-
-        <div class="result" id="whatResult">—</div>
       </div>
+      <button class="collapse-btn" type="button" aria-label="Collapse Calculate Percentage" aria-expanded="true" aria-controls="card-what-body">[ − ]</button>
+    </div>
+    <div class="calc-card-body" id="card-what-body">
+      <div class="calc-grid">
+        <div class="left-panel">
+          <div class="input-row">
+            <label for="whatX">X (percent)</label>
+            <input type="number" id="whatX" placeholder="e.g., 20" step="any" enterkeyhint="done" autocomplete="off">
+          </div>
+          <div class="swap-row">
+            <button class="swap-btn" id="swapWhatBtn" type="button" title="Swap X and Y values">⇅ swap values</button>
+          </div>
+          <div class="input-row">
+            <label for="whatY">Y (number)</label>
+            <input type="number" id="whatY" placeholder="e.g., 500" step="any" enterkeyhint="done" autocomplete="off">
+          </div>
 
-      <div class="right-panel">
-        <div class="formula-title">live formula</div>
-        <div class="live-formula" id="whatLiveFormula">(X / 100) × Y</div>
-        <div class="live-result" id="whatLiveResult">→ —</div>
+          <div class="button-group">
+            <button class="calc-btn" id="calcWhatBtn" type="button">calculate</button>
+            <button class="reset-btn" id="resetWhatBtn" type="button">clear</button>
+            <button class="copy-btn" id="copyWhatBtn" type="button">copy</button>
+          </div>
+
+          <div class="result" id="whatResult">—</div>
+        </div>
+
+        <div class="right-panel">
+          <div class="formula-title">live formula</div>
+          <div class="live-formula" id="whatLiveFormula">(X / 100) × Y</div>
+          <div class="live-result" id="whatLiveResult">→ —</div>
+        </div>
       </div>
     </div>
   </div>
 
-  <div class="calc-section" id="card-discount">
-    <div class="calc-grid">
-      <div class="left-panel">
+  <div class="calc-section" id="card-discount" data-calc="discount">
+    <div class="calc-card-header">
+      <button class="drag-handle" type="button" aria-label="Drag to reorder Discount" title="Drag to reorder">⠿</button>
+      <div class="card-heading">
         <div class="section-title">Discount</div>
         <div class="section-subtitle">Calculates final price and savings after a percentage discount.</div>
-
-        <div class="input-row">
-          <label for="discountPrice">Original price</label>
-          <input type="number" id="discountPrice" placeholder="e.g., 79.99" step="any" enterkeyhint="done" autocomplete="off">
-        </div>
-        <div class="swap-row">
-          <button class="swap-btn" id="swapDiscountBtn" type="button" title="Swap price and discount values">⇅ swap values</button>
-        </div>
-        <div class="input-row">
-          <label for="discountPercent">Discount (%)</label>
-          <input type="number" id="discountPercent" placeholder="e.g., 20" step="any" enterkeyhint="done" autocomplete="off">
-        </div>
-
-        <div class="button-group">
-          <button class="calc-btn" id="calcDiscountBtn" type="button">calculate</button>
-          <button class="reset-btn" id="resetDiscountBtn" type="button">clear</button>
-          <button class="copy-btn" id="copyDiscountBtn" type="button">copy</button>
-        </div>
-
-        <div class="result" id="discountResult">—</div>
       </div>
+      <button class="collapse-btn" type="button" aria-label="Collapse Discount" aria-expanded="true" aria-controls="card-discount-body">[ − ]</button>
+    </div>
+    <div class="calc-card-body" id="card-discount-body">
+      <div class="calc-grid">
+        <div class="left-panel">
+          <div class="input-row">
+            <label for="discountPrice">Original price</label>
+            <input type="number" id="discountPrice" placeholder="e.g., 79.99" step="any" enterkeyhint="done" autocomplete="off">
+          </div>
+          <div class="swap-row">
+            <button class="swap-btn" id="swapDiscountBtn" type="button" title="Swap price and discount values">⇅ swap values</button>
+          </div>
+          <div class="input-row">
+            <label for="discountPercent">Discount (%)</label>
+            <input type="number" id="discountPercent" placeholder="e.g., 20" step="any" enterkeyhint="done" autocomplete="off">
+          </div>
 
-      <div class="right-panel">
-        <div class="formula-title">live formula</div>
-        <div class="live-formula" id="discountLiveFormula">final = price × (1 − discount/100)<br>saved = price × discount/100</div>
-        <div class="live-result" id="discountLiveResult">→ —</div>
+          <div class="button-group">
+            <button class="calc-btn" id="calcDiscountBtn" type="button">calculate</button>
+            <button class="reset-btn" id="resetDiscountBtn" type="button">clear</button>
+            <button class="copy-btn" id="copyDiscountBtn" type="button">copy</button>
+          </div>
+
+          <div class="result" id="discountResult">—</div>
+        </div>
+
+        <div class="right-panel">
+          <div class="formula-title">live formula</div>
+          <div class="live-formula" id="discountLiveFormula">final = price × (1 − discount/100)<br>saved = price × discount/100</div>
+          <div class="live-result" id="discountLiveResult">→ —</div>
+        </div>
       </div>
     </div>
   </div>
 
-  <div class="calc-section" id="card-base">
-    <div class="calc-grid">
-      <div class="left-panel">
+  <div class="calc-section" id="card-base" data-calc="base">
+    <div class="calc-card-header">
+      <button class="drag-handle" type="button" aria-label="Drag to reorder Find Original Value" title="Drag to reorder">⠿</button>
+      <div class="card-heading">
         <div class="section-title">Find Original Value</div>
         <div class="section-subtitle">Finds the full number when you know a value and its percentage.</div>
-
-        <div class="input-row">
-          <label for="baseX">X (value)</label>
-          <input type="number" id="baseX" placeholder="e.g., 50" step="any" enterkeyhint="done" autocomplete="off">
-        </div>
-        <div class="swap-row">
-          <button class="swap-btn" id="swapBaseBtn" type="button" title="Swap X and Y values">⇅ swap values</button>
-        </div>
-        <div class="input-row">
-          <label for="baseY">Y (percent)</label>
-          <input type="number" id="baseY" placeholder="e.g., 25" step="any" enterkeyhint="done" autocomplete="off">
-        </div>
-
-        <div class="button-group">
-          <button class="calc-btn" id="calcBaseBtn" type="button">calculate</button>
-          <button class="reset-btn" id="resetBaseBtn" type="button">clear</button>
-          <button class="copy-btn" id="copyBaseBtn" type="button">copy</button>
-        </div>
-
-        <div class="result" id="baseResult">—</div>
       </div>
+      <button class="collapse-btn" type="button" aria-label="Collapse Find Original Value" aria-expanded="true" aria-controls="card-base-body">[ − ]</button>
+    </div>
+    <div class="calc-card-body" id="card-base-body">
+      <div class="calc-grid">
+        <div class="left-panel">
+          <div class="input-row">
+            <label for="baseX">X (value)</label>
+            <input type="number" id="baseX" placeholder="e.g., 50" step="any" enterkeyhint="done" autocomplete="off">
+          </div>
+          <div class="swap-row">
+            <button class="swap-btn" id="swapBaseBtn" type="button" title="Swap X and Y values">⇅ swap values</button>
+          </div>
+          <div class="input-row">
+            <label for="baseY">Y (percent)</label>
+            <input type="number" id="baseY" placeholder="e.g., 25" step="any" enterkeyhint="done" autocomplete="off">
+          </div>
 
-      <div class="right-panel">
-        <div class="formula-title">live formula</div>
-        <div class="live-formula" id="baseLiveFormula">X / (Y / 100)</div>
-        <div class="live-result" id="baseLiveResult">→ —</div>
+          <div class="button-group">
+            <button class="calc-btn" id="calcBaseBtn" type="button">calculate</button>
+            <button class="reset-btn" id="resetBaseBtn" type="button">clear</button>
+            <button class="copy-btn" id="copyBaseBtn" type="button">copy</button>
+          </div>
+
+          <div class="result" id="baseResult">—</div>
+        </div>
+
+        <div class="right-panel">
+          <div class="formula-title">live formula</div>
+          <div class="live-formula" id="baseLiveFormula">X / (Y / 100)</div>
+          <div class="live-result" id="baseLiveResult">→ —</div>
+        </div>
       </div>
     </div>
   </div>
 
-  <div class="calc-section" id="card-markup">
-    <div class="calc-grid">
-      <div class="left-panel">
+  <div class="calc-section" id="card-markup" data-calc="markup">
+    <div class="calc-card-header">
+      <button class="drag-handle" type="button" aria-label="Drag to reorder Markup &amp; Profit Margin" title="Drag to reorder">⠿</button>
+      <div class="card-heading">
         <div class="section-title">Markup &amp; Profit Margin</div>
         <div class="section-subtitle">Calculates net profit, markup % on cost, and gross margin % on selling price.</div>
-
-        <div class="input-row">
-          <label for="markupCost">Cost</label>
-          <input type="number" id="markupCost" placeholder="e.g., 80" step="any" enterkeyhint="done" autocomplete="off">
-        </div>
-        <div class="swap-row">
-          <button class="swap-btn" id="swapMarkupBtn" type="button" title="Swap cost and selling price">⇅ swap values</button>
-        </div>
-        <div class="input-row">
-          <label for="markupPrice">Selling price</label>
-          <input type="number" id="markupPrice" placeholder="e.g., 100" step="any" enterkeyhint="done" autocomplete="off">
-        </div>
-
-        <div class="button-group">
-          <button class="calc-btn" id="calcMarkupBtn" type="button">calculate</button>
-          <button class="reset-btn" id="resetMarkupBtn" type="button">clear</button>
-          <button class="copy-btn" id="copyMarkupBtn" type="button">copy</button>
-        </div>
-
-        <div class="result" id="markupResult">—</div>
       </div>
+      <button class="collapse-btn" type="button" aria-label="Collapse Markup &amp; Profit Margin" aria-expanded="true" aria-controls="card-markup-body">[ − ]</button>
+    </div>
+    <div class="calc-card-body" id="card-markup-body">
+      <div class="calc-grid">
+        <div class="left-panel">
+          <div class="input-row">
+            <label for="markupCost">Cost</label>
+            <input type="number" id="markupCost" placeholder="e.g., 80" step="any" enterkeyhint="done" autocomplete="off">
+          </div>
+          <div class="swap-row">
+            <button class="swap-btn" id="swapMarkupBtn" type="button" title="Swap cost and selling price">⇅ swap values</button>
+          </div>
+          <div class="input-row">
+            <label for="markupPrice">Selling price</label>
+            <input type="number" id="markupPrice" placeholder="e.g., 100" step="any" enterkeyhint="done" autocomplete="off">
+          </div>
 
-      <div class="right-panel">
-        <div class="formula-title">live formula</div>
-        <div class="live-formula" id="markupLiveFormula">profit = price − cost<br>markup = (profit / cost) × 100<br>margin = (profit / price) × 100</div>
-        <div class="live-result" id="markupLiveResult">→ —</div>
+          <div class="button-group">
+            <button class="calc-btn" id="calcMarkupBtn" type="button">calculate</button>
+            <button class="reset-btn" id="resetMarkupBtn" type="button">clear</button>
+            <button class="copy-btn" id="copyMarkupBtn" type="button">copy</button>
+          </div>
+
+          <div class="result" id="markupResult">—</div>
+        </div>
+
+        <div class="right-panel">
+          <div class="formula-title">live formula</div>
+          <div class="live-formula" id="markupLiveFormula">profit = price − cost<br>markup = (profit / cost) × 100<br>margin = (profit / price) × 100</div>
+          <div class="live-result" id="markupLiveResult">→ —</div>
+        </div>
       </div>
     </div>
   </div>
 
-  <div class="calc-section" id="card-tax">
-    <div class="calc-grid">
-      <div class="left-panel">
-        <div class="section-title-row">
-          <div class="section-title">Reverse Tax / VAT</div>
-          <div class="mode-toggle" role="group" aria-label="Tax calculation mode">
-            <button class="mode-btn active" id="taxModeAddBtn" data-mode="add" type="button">add tax</button>
-            <button class="mode-btn" id="taxModeExtractBtn" data-mode="extract" type="button">extract tax</button>
-          </div>
-        </div>
+  <div class="calc-section" id="card-tax" data-calc="tax">
+    <div class="calc-card-header">
+      <button class="drag-handle" type="button" aria-label="Drag to reorder Reverse Tax / VAT" title="Drag to reorder">⠿</button>
+      <div class="card-heading">
+        <div class="section-title">Reverse Tax / VAT</div>
         <div class="section-subtitle" id="taxSubtitle">Adds a percentage tax/VAT to a net amount or extracts tax from a tax-inclusive total.</div>
-
-        <div class="input-row">
-          <label for="taxAmount" id="taxAmountLabel">Net amount (before tax)</label>
-          <input type="number" id="taxAmount" placeholder="e.g., 100" step="any" enterkeyhint="done" autocomplete="off">
-        </div>
-        <div class="swap-row">
-          <button class="swap-btn" id="swapTaxBtn" type="button" title="Swap amount and tax rate">⇅ swap values</button>
-        </div>
-        <div class="input-row">
-          <label for="taxRate">Tax / VAT rate (%)</label>
-          <input type="number" id="taxRate" placeholder="e.g., 15" step="any" enterkeyhint="done" autocomplete="off">
-        </div>
-
-        <div class="button-group">
-          <button class="calc-btn" id="calcTaxBtn" type="button">calculate</button>
-          <button class="reset-btn" id="resetTaxBtn" type="button">clear</button>
-          <button class="copy-btn" id="copyTaxBtn" type="button">copy</button>
-        </div>
-
-        <div class="result" id="taxResult">—</div>
       </div>
+      <button class="collapse-btn" type="button" aria-label="Collapse Reverse Tax / VAT" aria-expanded="true" aria-controls="card-tax-body">[ − ]</button>
+    </div>
+    <div class="calc-card-body" id="card-tax-body">
+      <div class="calc-grid">
+        <div class="left-panel">
+          <div class="section-title-row">
+            <div class="mode-toggle" role="group" aria-label="Tax calculation mode">
+              <button class="mode-btn active" id="taxModeAddBtn" data-mode="add" type="button">add tax</button>
+              <button class="mode-btn" id="taxModeExtractBtn" data-mode="extract" type="button">extract tax</button>
+            </div>
+          </div>
 
-      <div class="right-panel">
-        <div class="formula-title">live formula</div>
-        <div class="live-formula" id="taxLiveFormula">tax = net × (rate / 100)<br>total = net + tax</div>
-        <div class="live-result" id="taxLiveResult">→ —</div>
+          <div class="input-row">
+            <label for="taxAmount" id="taxAmountLabel">Net amount (before tax)</label>
+            <input type="number" id="taxAmount" placeholder="e.g., 100" step="any" enterkeyhint="done" autocomplete="off">
+          </div>
+          <div class="swap-row">
+            <button class="swap-btn" id="swapTaxBtn" type="button" title="Swap amount and tax rate">⇅ swap values</button>
+          </div>
+          <div class="input-row">
+            <label for="taxRate">Tax / VAT rate (%)</label>
+            <input type="number" id="taxRate" placeholder="e.g., 15" step="any" enterkeyhint="done" autocomplete="off">
+          </div>
+
+          <div class="button-group">
+            <button class="calc-btn" id="calcTaxBtn" type="button">calculate</button>
+            <button class="reset-btn" id="resetTaxBtn" type="button">clear</button>
+            <button class="copy-btn" id="copyTaxBtn" type="button">copy</button>
+          </div>
+
+          <div class="result" id="taxResult">—</div>
+        </div>
+
+        <div class="right-panel">
+          <div class="formula-title">live formula</div>
+          <div class="live-formula" id="taxLiveFormula">tax = net × (rate / 100)<br>total = net + tax</div>
+          <div class="live-result" id="taxLiveResult">→ —</div>
+        </div>
       </div>
     </div>
+  </div>
+
+  <div class="calc-section" id="card-tip" data-calc="tip">
+    <div class="calc-card-header">
+      <button class="drag-handle" type="button" aria-label="Drag to reorder Tip &amp; Bill Split" title="Drag to reorder">⠿</button>
+      <div class="card-heading">
+        <div class="section-title">Tip &amp; Bill Split</div>
+        <div class="section-subtitle">Calculates tip amount, total bill, and per-person split.</div>
+      </div>
+      <button class="collapse-btn" type="button" aria-label="Collapse Tip &amp; Bill Split" aria-expanded="true" aria-controls="card-tip-body">[ − ]</button>
+    </div>
+    <div class="calc-card-body" id="card-tip-body">
+      <div class="calc-grid">
+        <div class="left-panel">
+          <div class="input-row">
+            <label for="tipBill">Bill amount</label>
+            <input type="number" id="tipBill" placeholder="e.g., 100" min="0" step="any" enterkeyhint="done" autocomplete="off">
+          </div>
+          <div class="swap-row">
+            <button class="swap-btn" id="swapTipBtn" type="button" title="Swap bill amount and tip percentage">⇅ swap values</button>
+          </div>
+          <div class="input-row">
+            <label for="tipPercent">Tip %</label>
+            <input type="number" id="tipPercent" placeholder="e.g., 15" min="0" step="any" enterkeyhint="done" autocomplete="off">
+          </div>
+          <div class="preset-row" role="group" aria-label="Tip percentage presets">
+            <button class="preset-btn" data-tip="10" type="button">10%</button>
+            <button class="preset-btn" data-tip="15" type="button">15%</button>
+            <button class="preset-btn" data-tip="18" type="button">18%</button>
+            <button class="preset-btn" data-tip="20" type="button">20%</button>
+          </div>
+          <div class="input-row">
+            <label for="tipPeople">People split</label>
+            <input type="number" id="tipPeople" value="1" min="1" step="1" enterkeyhint="done" autocomplete="off">
+          </div>
+
+          <div class="button-group">
+            <button class="calc-btn" id="calcTipBtn" type="button">calculate</button>
+            <button class="reset-btn" id="resetTipBtn" type="button">clear</button>
+            <button class="copy-btn" id="copyTipBtn" type="button">copy</button>
+          </div>
+          <div class="result" id="tipResult">—</div>
+        </div>
+        <div class="right-panel">
+          <div class="formula-title">live formula</div>
+          <div class="live-formula" id="tipLiveFormula">Tip = bill × (tip % / 100)<br>Total = bill + tip<br>Each (÷people) = total / people</div>
+          <div class="live-result" id="tipLiveResult">→ —</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   </div>
 
   <div class="calc-section history-section" id="historySection">
@@ -1216,6 +1414,7 @@
           <option value="base">find original</option>
           <option value="markup">markup &amp; margin</option>
           <option value="tax">tax / vat</option>
+          <option value="tip">tip &amp; split</option>
         </select>
         <button class="reset-btn" id="clearHistoryBtn" type="button">clear history</button>
         <div class="confirm-group hidden" id="clearHistoryConfirm">
@@ -1230,7 +1429,7 @@
     </div>
   </div>
 
-  <footer>Mohamed Sayed · Ahmed Emara · DeepSeek · ChatGPT · Antigravity · 2026 · <span id="appVersion">Mobile &amp; Web v2.2.1</span></footer>
+  <footer>Mohamed Sayed · Ahmed Emara · DeepSeek · ChatGPT · Antigravity · 2026 · <span id="appVersion">Mobile &amp; Web v2.3.0</span></footer>
 </div>
 
 <div class="modal-backdrop hidden" id="aboutModal" role="dialog" aria-modal="true" aria-labelledby="aboutModalTitle">
@@ -1244,7 +1443,7 @@
       <div class="about-icon-badge" aria-hidden="true">%</div>
       <div>
         <div class="about-app-name" id="aboutAppName">Percentage Calculator Tool</div>
-        <div class="about-version-pill" id="aboutVersionPill">Mobile &amp; Web v2.2.1 · Offline HTML / PWA</div>
+        <div class="about-version-pill" id="aboutVersionPill">Mobile &amp; Web v2.3.0 · Offline HTML / PWA</div>
       </div>
     </div>
 
@@ -1347,6 +1546,11 @@
       <div class="update-status-text" id="updateStatusText">Not checked yet in this session.</div>
     </div>
 
+    <div class="about-box">
+      <div class="about-box-title">LAYOUT</div>
+      <button class="utility-btn" id="resetLayoutBtn" type="button">reset card order &amp; expand all</button>
+    </div>
+
     <div class="modal-footer">
       <button class="calc-btn" id="closeSettingsBtn" type="button">close [esc]</button>
     </div>
@@ -1361,7 +1565,7 @@
   const HISTORY_LIMIT = 500;
   const MAX_FIELD_LEN = 256;
   const MAX_COPY_LEN = 4096;
-  const APP_VERSION = "2.2.1";
+  const APP_VERSION = "2.3.0";
   const WEB_APP_URL = "https://ciphervaults.github.io/Percentage-Calculator-Tool/";
   const RELEASE_URL =
     "https://github.com/CipherVaults/Percentage-Calculator-Tool/releases/latest";
@@ -1375,21 +1579,24 @@
   const UPDATE_MAX_BYTES = 65536;
   const HISTORY_STORAGE_KEY = "pct_tool_history_v2";
   const SETTINGS_STORAGE_KEY = "pct_tool_settings_v1";
-  const ALLOWED_CALCULATORS = new Set([
+  const DEFAULT_CARD_ORDER = Object.freeze([
     "change",
     "percent",
     "what",
     "discount",
     "base",
     "markup",
-    "tax"
+    "tax",
+    "tip"
   ]);
+  const ALLOWED_CALCULATORS = new Set(DEFAULT_CARD_ORDER);
 
   let taxMode = "add";
   let memoryHistory = [];
   let allHistoryEntries = [];
   let historyFilterValue = "all";
-  let currentSettings = { checkUpdatesOnStartup: true };
+  let currentSettings = defaultSettings();
+  let cardDrag = null;
   let latestReleaseUrl = RELEASE_URL;
   let deferredInstallPrompt = null;
   let swRegistration = null;
@@ -1401,7 +1608,8 @@
     discount: 0,
     base: 0,
     markup: 0,
-    tax: 0
+    tax: 0,
+    tip: 0
   };
 
   const lastValidCalc = {
@@ -1411,7 +1619,8 @@
     discount: null,
     base: null,
     markup: null,
-    tax: null
+    tax: null,
+    tip: null
   };
 
   // --- Pure calculation engine (100% byte-for-byte parity with percent-core) ---
@@ -1577,6 +1786,32 @@
     };
   }
 
+  function calcTipSplit(bill, tipPercent, people) {
+    if (bill < 0) return { ok: "false", error: "Bill amount cannot be negative" };
+    if (tipPercent < 0) return { ok: "false", error: "Tip % cannot be negative" };
+    if (!Number.isFinite(people) || people < 1 || !Number.isInteger(people)) {
+      return { ok: "false", error: "People must be a whole number (1 or more)" };
+    }
+    const tipAmount = bill * (tipPercent / 100);
+    const totalBill = bill + tipAmount;
+    const perPerson = totalBill / people;
+    const tipText = formatDecimal(tipAmount);
+    const totalText = formatDecimal(totalBill);
+    const perPersonText = formatDecimal(perPerson);
+    return {
+      ok: "true",
+      tipAmount,
+      totalBill,
+      perPerson,
+      tipText,
+      totalText,
+      perPersonText,
+      label: `Each: ${perPersonText}<br>Total: ${totalText} · Tip: ${tipText}`,
+      liveResult: `Each: ${perPersonText} · Total: ${totalText}`,
+      copyText: `Each: ${perPersonText}\nTotal: ${totalText} · Tip: ${tipText}`
+    };
+  }
+
   // --- Persistent on-device history (localStorage with in-memory fallback) ---
 
   function hasControlChars(value, allowNewlines = false) {
@@ -1604,6 +1839,8 @@
       !isValidHistoryField(item.calculatorLabel) ||
       !isValidHistoryField(item.inputA) ||
       !isValidHistoryField(item.inputB) ||
+      ((item.calculator === "tip" || item.inputC != null) &&
+        !isValidHistoryField(item.inputC)) ||
       !isValidHistoryField(item.inputsText) ||
       !isValidHistoryField(item.resultText)
     ) {
@@ -1628,6 +1865,7 @@
       calculatorLabel: item.calculatorLabel,
       inputA: item.inputA,
       inputB: item.inputB,
+      inputC: item.inputC ?? null,
       mode,
       inputsText: item.inputsText,
       resultText: item.resultText,
@@ -1643,6 +1881,8 @@
       !isValidHistoryField(candidate.calculatorLabel) ||
       !isValidHistoryField(candidate.inputA) ||
       !isValidHistoryField(candidate.inputB) ||
+      ((candidate.calculator === "tip" || candidate.inputC != null) &&
+        !isValidHistoryField(candidate.inputC)) ||
       !isValidHistoryField(candidate.inputsText) ||
       !isValidHistoryField(candidate.resultText) ||
       !isValidHistoryField(candidate.copyText, true)
@@ -1714,6 +1954,7 @@
       first.calculator === cleanEntry.calculator &&
       first.inputA === cleanEntry.inputA &&
       first.inputB === cleanEntry.inputB &&
+      (first.inputC ?? null) === (cleanEntry.inputC ?? null) &&
       (first.mode ?? null) === (cleanEntry.mode ?? null) &&
       first.resultText === cleanEntry.resultText
     ) {
@@ -1751,38 +1992,253 @@
     return writeHistoryToStorage(entries);
   }
 
+  function defaultSettings(checkUpdatesOnStartup = true) {
+    return {
+      checkUpdatesOnStartup,
+      cardOrder: [...DEFAULT_CARD_ORDER],
+      collapsedCards: []
+    };
+  }
+
+  function sanitizeSettings(settings) {
+    if (
+      !settings ||
+      typeof settings !== "object" ||
+      Array.isArray(settings) ||
+      Object.keys(settings).some(
+        (key) => !["checkUpdatesOnStartup", "cardOrder", "collapsedCards"].includes(key)
+      ) ||
+      !Object.hasOwn(settings, "checkUpdatesOnStartup") ||
+      typeof settings.checkUpdatesOnStartup !== "boolean"
+    ) {
+      return null;
+    }
+    const cardOrder = Object.hasOwn(settings, "cardOrder")
+      ? settings.cardOrder
+      : DEFAULT_CARD_ORDER;
+    const collapsedCards = Object.hasOwn(settings, "collapsedCards")
+      ? settings.collapsedCards
+      : [];
+    if (
+      !Array.isArray(cardOrder) ||
+      cardOrder.length !== DEFAULT_CARD_ORDER.length ||
+      new Set(cardOrder).size !== DEFAULT_CARD_ORDER.length ||
+      !DEFAULT_CARD_ORDER.every((key) => cardOrder.includes(key)) ||
+      !Array.isArray(collapsedCards) ||
+      collapsedCards.length > DEFAULT_CARD_ORDER.length ||
+      new Set(collapsedCards).size !== collapsedCards.length ||
+      ![...collapsedCards].every((key) => ALLOWED_CALCULATORS.has(key))
+    ) {
+      return null;
+    }
+    return {
+      checkUpdatesOnStartup: settings.checkUpdatesOnStartup,
+      cardOrder: [...cardOrder],
+      collapsedCards: [...collapsedCards]
+    };
+  }
+
   function readSettingsFromStorage() {
     try {
       const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
-      if (raw === null || raw === "") return { checkUpdatesOnStartup: true };
-      const parsed = JSON.parse(raw);
-      return {
-        checkUpdatesOnStartup:
-          typeof parsed?.checkUpdatesOnStartup === "boolean"
-            ? parsed.checkUpdatesOnStartup
-            : false
-      };
+      if (raw === null) return defaultSettings();
+      return sanitizeSettings(JSON.parse(raw)) ?? defaultSettings(false);
     } catch {
-      return { checkUpdatesOnStartup: false };
+      return defaultSettings(false);
     }
   }
 
   function writeSettingsToStorage(settings) {
-    const previous = { ...currentSettings };
-    const clean = {
-      checkUpdatesOnStartup: Boolean(settings?.checkUpdatesOnStartup)
-    };
+    const previous = currentSettings;
+    const clean = sanitizeSettings({ ...previous, ...settings });
+    if (!clean) return previous;
     try {
       window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(clean));
       currentSettings = clean;
+      applySettingsUi();
       return clean;
     } catch {
       currentSettings = previous;
-      const toggle = document.getElementById("autoUpdateToggle");
-      if (toggle) toggle.checked = Boolean(previous.checkUpdatesOnStartup);
-      setUpdateStatus("Failed to save update setting on this device.", true);
+      applySettingsUi();
+      setUpdateStatus("Failed to save settings on this device.", true);
       return previous;
     }
+  }
+
+  // --- Card layout: CSS-only visual state, committed only after storage succeeds ---
+
+  function syncQuickNav() {
+    const nav = document.querySelector(".quick-nav");
+    const historyLink = nav.querySelector('a[href="#historySection"]');
+    document.querySelectorAll("#cardsContainer > .calc-section").forEach((card) => {
+      const link = nav.querySelector(`.quick-link[data-calc="${card.dataset.calc}"]`);
+      if (link) nav.insertBefore(link, historyLink);
+    });
+  }
+
+  function setCardCollapsed(card, collapsed) {
+    card.classList.toggle("card-collapsed", collapsed);
+    const button = card.querySelector(".collapse-btn");
+    button.setAttribute("aria-expanded", String(!collapsed));
+    button.textContent = collapsed ? "[ + ]" : "[ − ]";
+    const title = card.querySelector(".section-title").textContent;
+    button.setAttribute("aria-label", `${collapsed ? "Expand" : "Collapse"} ${title}`);
+  }
+
+  function applySettingsUi() {
+    const toggle = document.getElementById("autoUpdateToggle");
+    if (toggle) toggle.checked = currentSettings.checkUpdatesOnStartup;
+    const container = document.getElementById("cardsContainer");
+    currentSettings.cardOrder.forEach((key, index) => {
+      const card = document.getElementById(`card-${key}`);
+      if (container.children[index] !== card) {
+        container.insertBefore(card, container.children[index] ?? null);
+      }
+      setCardCollapsed(card, currentSettings.collapsedCards.includes(key));
+    });
+    syncQuickNav();
+  }
+
+  function expandCard(key) {
+    if (!ALLOWED_CALCULATORS.has(key)) return;
+    const card = document.getElementById(`card-${key}`);
+    if (!card.classList.contains("card-collapsed")) return;
+    writeSettingsToStorage({
+      collapsedCards: currentSettings.collapsedCards.filter((id) => id !== key)
+    });
+    // Navigation must expose its target even when storage is unavailable.
+    setCardCollapsed(card, false);
+  }
+
+  function clearDropIndicators() {
+    document.querySelectorAll("#cardsContainer > .calc-section").forEach((card) => {
+      card.classList.remove("card-drop-before", "card-drop-after");
+    });
+  }
+
+  function updateDropTarget() {
+    clearDropIndicators();
+    const drag = cardDrag;
+    if (!drag?.moved) return;
+    const cards = [...document.querySelectorAll("#cardsContainer > .calc-section")]
+      .filter((card) => card !== drag.card);
+    drag.target = null;
+    for (const card of cards) {
+      const rect = card.getBoundingClientRect();
+      drag.target = card;
+      drag.before = drag.y < rect.top + rect.height / 2;
+      if (drag.y <= rect.bottom) break;
+    }
+    drag.target?.classList.add(drag.before ? "card-drop-before" : "card-drop-after");
+  }
+
+  function scrollWhileDragging() {
+    const drag = cardDrag;
+    if (!drag?.moved) return;
+    const edge = 64;
+    const delta = drag.y < edge ? -14 : drag.y > window.innerHeight - edge ? 14 : 0;
+    if (delta) {
+      window.scrollBy({ top: delta, behavior: "instant" });
+      updateDropTarget();
+    }
+    drag.frame = window.requestAnimationFrame(scrollWhileDragging);
+  }
+
+  function finishCardDrag(commit = false) {
+    const drag = cardDrag;
+    if (!drag) return;
+    cardDrag = null;
+    window.cancelAnimationFrame(drag.frame);
+    drag.card.classList.remove("card-dragging");
+    clearDropIndicators();
+    try {
+      if (drag.handle.hasPointerCapture?.(drag.pointerId)) {
+        drag.handle.releasePointerCapture?.(drag.pointerId);
+      }
+    } catch {
+      // Ignore if pointer capture is unsupported or already released.
+    }
+    if (commit && drag.moved && drag.target) {
+      const container = document.getElementById("cardsContainer");
+      container.insertBefore(drag.card, drag.before ? drag.target : drag.target.nextSibling);
+      syncQuickNav();
+      writeSettingsToStorage({
+        cardOrder: [...container.children].map((card) => card.dataset.calc)
+      });
+      drag.handle.focus({ preventScroll: true });
+    }
+  }
+
+  function bindCardLayout() {
+    document.querySelectorAll("#cardsContainer > .calc-section").forEach((card) => {
+      const key = card.dataset.calc;
+      card.querySelector(".collapse-btn").addEventListener("click", () => {
+        const collapsedCards = currentSettings.collapsedCards.filter((id) => id !== key);
+        if (!card.classList.contains("card-collapsed")) collapsedCards.push(key);
+        writeSettingsToStorage({ collapsedCards });
+      });
+      const handle = card.querySelector(".drag-handle");
+      handle.addEventListener("pointerdown", (event) => {
+        if (cardDrag || event.button !== 0 || event.isPrimary === false) return;
+        event.preventDefault();
+        try {
+          handle.setPointerCapture?.(event.pointerId);
+        } catch {
+          // Synthetic events or browsers without active capture still drag cleanly.
+        }
+        handle.focus({ preventScroll: true });
+        cardDrag = {
+          card, handle, pointerId: event.pointerId,
+          startX: event.clientX, startY: event.clientY, y: event.clientY,
+          moved: false, target: null, before: true, frame: 0
+        };
+      });
+    });
+    document.addEventListener("pointermove", (event) => {
+      const drag = cardDrag;
+      if (!drag || event.pointerId !== drag.pointerId) return;
+      event.preventDefault();
+      drag.y = event.clientY;
+      if (!drag.moved) {
+        if (Math.hypot(event.clientX - drag.startX, drag.y - drag.startY) < 6) return;
+        drag.moved = true;
+        drag.card.classList.add("card-dragging");
+        drag.frame = window.requestAnimationFrame(scrollWhileDragging);
+      }
+      updateDropTarget();
+    });
+    document.addEventListener("pointerup", (event) => {
+      if (cardDrag?.pointerId !== event.pointerId) return;
+      cardDrag.y = event.clientY;
+      updateDropTarget();
+      finishCardDrag(true);
+    });
+    document.addEventListener("pointercancel", (event) => {
+      if (cardDrag?.pointerId === event.pointerId) finishCardDrag();
+    });
+    document.addEventListener("lostpointercapture", (event) => {
+      if (cardDrag?.pointerId === event.pointerId) finishCardDrag();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && cardDrag) {
+        event.preventDefault();
+        finishCardDrag();
+      }
+    });
+    document.querySelectorAll(".quick-link[data-calc]").forEach((link) => {
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        const key = link.dataset.calc;
+        expandCard(key);
+        const card = document.getElementById(`card-${key}`);
+        card.scrollIntoView({ behavior: "smooth", block: "start" });
+        card.querySelector("input")?.focus({ preventScroll: true });
+      });
+    });
+    document.getElementById("resetLayoutBtn").addEventListener("click", () => {
+      finishCardDrag();
+      writeSettingsToStorage({ cardOrder: [...DEFAULT_CARD_ORDER], collapsedCards: [] });
+    });
   }
 
   // --- DOM helpers & clipboard ---
@@ -1801,7 +2257,10 @@
     "markupCost",
     "markupPrice",
     "taxAmount",
-    "taxRate"
+    "taxRate",
+    "tipBill",
+    "tipPercent",
+    "tipPeople"
   ];
 
   const FINITE_DECIMAL_RE = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i;
@@ -2520,6 +2979,76 @@
     };
   }
 
+  function updateTipLive() {
+    ++seq.tip;
+    const bill = getNumber("tipBill");
+    const tipPercent = getNumber("tipPercent");
+    const people = getNumber("tipPeople");
+    const formulaDiv = document.getElementById("tipLiveFormula");
+    const resultSpan = document.getElementById("tipLiveResult");
+    const defaultLines = [
+      "Tip = bill × (tip % / 100)",
+      "Total = bill + tip",
+      "Each (÷people) = total / people"
+    ];
+    document.querySelectorAll(".preset-btn[data-tip]").forEach((button) => {
+      const active = tipPercent !== null && tipPercent === Number(button.dataset.tip);
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", String(active));
+    });
+
+    if (bill === null || tipPercent === null || people === null) {
+      lastValidCalc.tip = null;
+      setLines(formulaDiv, defaultLines);
+      resultSpan.textContent = "→ —";
+      setResult("tipResult", "—");
+      return;
+    }
+
+    if (!Number.isFinite(bill) || !Number.isFinite(tipPercent) || !Number.isFinite(people)) {
+      setCardOutOfRange("tip", formulaDiv, resultSpan, "tipResult", defaultLines);
+      return;
+    }
+
+    const result = calcTipSplit(bill, tipPercent, people);
+    if (result.ok === "false") {
+      lastValidCalc.tip = null;
+      setFormulaError(formulaDiv, defaultLines[0], `(${result.error.toLowerCase()})`);
+      resultSpan.textContent = "→ invalid";
+      setResult("tipResult", result.error, true);
+      return;
+    }
+    if (
+      !allFiniteValues(
+        result,
+        ["tipAmount", "totalBill", "perPerson"],
+        ["tipText", "totalText", "perPersonText", "label", "liveResult", "copyText"]
+      )
+    ) {
+      setCardOutOfRange("tip", formulaDiv, resultSpan, "tipResult", defaultLines);
+      return;
+    }
+
+    setLines(formulaDiv, [
+      `Tip = ${fmtFormulaNum(bill)} × (${fmtFormulaNum(tipPercent)} / 100) = ${result.tipText}`,
+      `Total = ${fmtFormulaNum(bill)} + ${result.tipText} = ${result.totalText}`,
+      `Each (÷${fmtFormulaNum(people)}) = ${result.totalText} / ${fmtFormulaNum(people)} = ${result.perPersonText}`
+    ]);
+    resultSpan.textContent = `→ ${result.liveResult}`;
+    setResult("tipResult", result.label);
+    lastValidCalc.tip = {
+      calculator: "tip",
+      calculatorLabel: "Tip & Bill Split",
+      inputA: getRawInput("tipBill"),
+      inputB: getRawInput("tipPercent"),
+      inputC: getRawInput("tipPeople"),
+      mode: null,
+      inputsText: `Bill ${bill} + ${tipPercent}% tip ÷ ${people} people`,
+      resultText: `Each: ${result.perPersonText} · Total: ${result.totalText} · Tip: ${result.tipText}`,
+      copyText: result.copyText
+    };
+  }
+
   // --- History UI ---
 
   function formatHistoryTime(timestampMs) {
@@ -2563,7 +3092,8 @@
       },
       base: { card: "card-base", a: "baseX", b: "baseY", fn: updateBaseLive },
       markup: { card: "card-markup", a: "markupCost", b: "markupPrice", fn: updateMarkupLive },
-      tax: { card: "card-tax", a: "taxAmount", b: "taxRate", fn: updateTaxLive }
+      tax: { card: "card-tax", a: "taxAmount", b: "taxRate", fn: updateTaxLive },
+      tip: { card: "card-tip", a: "tipBill", b: "tipPercent", c: "tipPeople", fn: updateTipLive }
     };
 
     if (!entry || !Object.hasOwn(map, entry.calculator)) return;
@@ -2579,7 +3109,9 @@
 
     elA.value = entry.inputA;
     elB.value = entry.inputB;
+    if (target.c) document.getElementById(target.c).value = entry.inputC ?? "1";
     target.fn();
+    expandCard(entry.calculator);
     flashRestoredCard(target.card);
     elA.focus({ preventScroll: true });
   }
@@ -2713,6 +3245,12 @@
     resetFields(["baseX", "baseY"], "baseResult", updateBaseLive);
     resetFields(["markupCost", "markupPrice"], "markupResult", updateMarkupLive);
     resetFields(["taxAmount", "taxRate"], "taxResult", updateTaxLive);
+    resetTipFields();
+  }
+
+  function resetTipFields() {
+    document.getElementById("tipPeople").value = "1";
+    resetFields(["tipBill", "tipPercent"], "tipResult", updateTipLive);
   }
 
   // --- Modals & PWA install helper ---
@@ -2984,11 +3522,9 @@
   }
 
   function syncSettingsUi() {
+    finishCardDrag();
     currentSettings = readSettingsFromStorage();
-    const toggle = document.getElementById("autoUpdateToggle");
-    if (toggle) {
-      toggle.checked = Boolean(currentSettings.checkUpdatesOnStartup);
-    }
+    applySettingsUi();
   }
 
   function bindControls() {
@@ -3126,7 +3662,7 @@
       }
     });
 
-    // Swap buttons across all 7 cards
+    // Swap buttons across all 8 cards
     document
       .getElementById("swapChangeBtn")
       .addEventListener("click", () =>
@@ -3162,6 +3698,15 @@
       .addEventListener("click", () =>
         swapFields("taxAmount", "taxRate", updateTaxLive)
       );
+    document.getElementById("swapTipBtn").addEventListener("click", () =>
+      swapFields("tipBill", "tipPercent", updateTipLive)
+    );
+    document.querySelectorAll(".preset-btn[data-tip]").forEach((button) => {
+      button.addEventListener("click", () => {
+        document.getElementById("tipPercent").value = button.dataset.tip;
+        updateTipLive();
+      });
+    });
 
     // Tax mode toggle
     document
@@ -3287,6 +3832,15 @@
         await copyCardResult("tax", event.currentTarget);
       });
 
+    document.getElementById("calcTipBtn").addEventListener("click", () => {
+      updateTipLive();
+      recordHistoryFor("tip");
+    });
+    document.getElementById("resetTipBtn").addEventListener("click", resetTipFields);
+    document.getElementById("copyTipBtn").addEventListener("click", async (event) => {
+      await copyCardResult("tip", event.currentTarget);
+    });
+
     // History filter & clear confirmation flow
     document
       .getElementById("historyFilter")
@@ -3355,6 +3909,9 @@
       .getElementById("taxAmount")
       .addEventListener("input", updateTaxLive);
     document.getElementById("taxRate").addEventListener("input", updateTaxLive);
+    ["tipBill", "tipPercent", "tipPeople"].forEach((id) => {
+      document.getElementById(id).addEventListener("input", updateTipLive);
+    });
 
     attachPasteSanitizers();
   }
@@ -3387,6 +3944,10 @@
     attachEnterKey(["taxAmount", "taxRate"], () => {
       updateTaxLive();
       recordHistoryFor("tax");
+    });
+    attachEnterKey(["tipBill", "tipPercent", "tipPeople"], () => {
+      updateTipLive();
+      recordHistoryFor("tip");
     });
   }
 
@@ -3425,6 +3986,7 @@
 
   function initialize() {
     bindControls();
+    bindCardLayout();
     bindLiveUpdates();
     bindEnterKeys();
 
@@ -3435,6 +3997,7 @@
     updateBaseLive();
     updateMarkupLive();
     updateTaxLive();
+    updateTipLive();
     loadHistory();
     syncSettingsUi();
     updateInstallUi();
